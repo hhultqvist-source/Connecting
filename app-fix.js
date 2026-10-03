@@ -1,15 +1,16 @@
 document.addEventListener("DOMContentLoaded", function () {
   var camera = document.getElementById("imgBtn");
-  var capture = document.getElementById("captureInput");
+  var filePicker = document.getElementById("fileInput");
   var sheet = document.getElementById("sheet");
 
-  if (camera) {
+  if (camera && filePicker) {
     camera.setAttribute("aria-label", "Add photo, video or file");
-    camera.setAttribute("aria-haspopup", "menu");
+    camera.removeAttribute("aria-haspopup");
     camera.onclick = function (event) {
       event.preventDefault();
       event.stopPropagation();
-      if (sheet) sheet.hidden = !sheet.hidden;
+      if (sheet) sheet.hidden = true;
+      filePicker.click();
     };
   }
 
