@@ -29,7 +29,7 @@ http.createServer((req,res)=>{
       fs.readFile(path.join(root,"index.html"),(e,fallback)=>{
         if(e){res.writeHead(404);return res.end("Not found");}
         res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store"});
-        res.end(fallback);
+        res.end(Buffer.from(fallback.toString("utf8").replace("</body>","<script src=\"/ui-fix.js\"></script><script src=\"/app-fix.js\"></script></body>"),"utf8"));
       });
       return;
     }
@@ -39,6 +39,6 @@ http.createServer((req,res)=>{
       "X-Content-Type-Options":"nosniff",
       "Referrer-Policy":"same-origin"
     });
-    res.end(data);
+    res.end(pathname.endsWith(".html") ? Buffer.from(data.toString("utf8").replace("</body>","<script src=\"/ui-fix.js\"></script><script src=\"/app-fix.js\"></script></body>"),"utf8") : data);
   });
 }).listen(port,()=>console.log("Connecting live on port "+port));
