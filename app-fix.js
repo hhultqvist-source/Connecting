@@ -3,14 +3,13 @@ document.addEventListener("DOMContentLoaded", function () {
   var capture = document.getElementById("captureInput");
   var sheet = document.getElementById("sheet");
 
-  if (camera && capture) {
-    camera.setAttribute("aria-label", "Open camera");
-    camera.removeAttribute("aria-haspopup");
+  if (camera) {
+    camera.setAttribute("aria-label", "Add photo, video or file");
+    camera.setAttribute("aria-haspopup", "menu");
     camera.onclick = function (event) {
       event.preventDefault();
       event.stopPropagation();
-      if (sheet) sheet.hidden = true;
-      capture.click();
+      if (sheet) sheet.hidden = !sheet.hidden;
     };
   }
 
