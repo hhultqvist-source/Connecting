@@ -69,6 +69,32 @@ document.addEventListener("DOMContentLoaded", function () {
     };
   }
 
+  // Place Online at far left of the Connecting header on the same row.
+  var headerTop = document.querySelector(".connect-top");
+  var contactRow = document.querySelector(".connect-contact");
+  var contactLabel = document.getElementById("contactLabel");
+  var contactDot = document.getElementById("contactDot");
+  var contactStatus = document.getElementById("contactStatus");
+
+  if (headerTop && contactDot && contactStatus) {
+    var onlineWrap = document.createElement("div");
+    onlineWrap.id = "onlineInline";
+    onlineWrap.setAttribute("aria-label", "Presence status");
+    onlineWrap.appendChild(contactDot);
+    onlineWrap.appendChild(contactStatus);
+    headerTop.insertBefore(onlineWrap, headerTop.firstChild);
+  }
+  if (contactLabel) contactLabel.remove();
+  if (contactRow) contactRow.style.display = "none";
+
+  var presenceStyle = document.createElement("style");
+  presenceStyle.textContent =
+    ".connect-top{grid-template-columns:auto 1fr 44px!important}" +
+    "#onlineInline{display:flex;align-items:center;gap:7px;justify-self:start;font-size:12.5px;color:var(--mute);white-space:nowrap}" +
+    "#onlineInline .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}" +
+    ".connect-mark{justify-self:center}";
+  document.head.appendChild(presenceStyle);
+
   var settings = document.getElementById("settings");
   var settingsBtn = document.getElementById("settingsBtn");
 
