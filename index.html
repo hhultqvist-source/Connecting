@@ -887,22 +887,16 @@ $("saveKeys").onclick = () => {
 
 /* ---------- Claude ---------- */
 async function callClaude(system, content, maxTokens = 1024){
-  if (!has(KEYS.claude)) {
-    if (IS_OWNER) { $("settingsBtn").click(); throw new Error("Add your Claude key in Settings."); }
-    throw new Error(t("serviceNotConnected"));
-  }
   setStatus("Translating…");
-  const res = await fetchTimeout("https://api.anthropic.com/v1/messages", {
+  const res = await fetchTimeout("/api/claude", {
     method:"POST",
-    headers:{
-      "x-api-key":KEYS.claude, "anthropic-version":"2023-06-01",
-      "anthropic-dangerous-direct-browser-access":"true", "content-type":"application/json"
-    },
-    body:JSON.stringify({ model:CLAUDE_MODEL, max_tokens:maxTokens, system, messages:[{ role:"user", content }] })
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({ system, content, maxTokens })
   });
   const data = await jsonOrError(res);
   setStatus("Ready");
-  return data.content.filter(c => c.type === "text").map(c => c.text).join("").trim();
+  if (!data.text) throw new Error(t("serviceNotConnected"));
+  return data.text;
 }
 
 const toneLine = () => "Preserve the writer's exact intent, informality, rhythm and tone. Do not improve, embellish or make the message more polished than the source.";
