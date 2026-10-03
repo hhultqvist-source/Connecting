@@ -92,7 +92,7 @@ document.addEventListener("DOMContentLoaded", function () {
   var style = document.createElement("style");
   style.textContent =
     ".composer.composer-expanded{padding-top:8px}" +
-    ".composer.composer-expanded .field{align-items:flex-end}" +
-    ".composer.composer-expanded #input{min-height:min(330px,38dvh)!important;max-height:min(330px,38dvh)!important}";
+    ".composer.composer-expanded .field{align-items:flex-end;padding-left:8px!important}" +
+    ".composer.composer-expanded #input{min-height:min(330px,38dvh)!important;max-height:min(330px,38dvh)!important;padding-left:0!important;margin-left:0!important;text-align:left!important}";
   document.head.appendChild(style);
 });
