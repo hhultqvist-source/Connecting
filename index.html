@@ -994,7 +994,1144 @@ $("input").addEventListener("keydown", e => {
 
 function autosize(){
   const i = $("input");
+  if (!i) return;
   const field = i.closest(".field");
-  if (!i || !field) return;
+  if (!field) return;
 
-  // Never rewrite input.value here: preserving the DOM node/value keeps the caret stable while editing.
+  // Keep lines 1–2 compact. The moment line 3 starts, the composer jumps upward.
+  // Never replace the textarea or rewrite its value, so the caret stays exactly where the user edits.
+  const cs = getComputedStyle(i);
+  const line = parseFloat(cs.lineHeight) || 22.4;
+  const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  const oneLine = Math.ceil(line + pad);
+  const twoLines = Math.ceil(line * 2 + pad + 2);
+  const threeLines = Math.ceil(line * 3 + pad + 2);
+  const maxHeight = Math.max(threeLines, Math.min(156, Math.round(innerHeight * .28)));
+
+  i.style.height = "auto";
+  const wanted = i.scrollHeight;
+  const expanded = wanted > twoLines + 1;
+  field.classList.toggle("input-expanded", expanded);
+
+  const target = expanded
+    ? Math.max(threeLines, Math.min(wanted, maxHeight))
+    : Math.max(oneLine, Math.min(wanted, twoLines));
+
+  i.style.height = target + "px";
+  i.style.overflowY = wanted > maxHeight ? "auto" : "hidden";
+}
+$("input").addEventListener("input", autosize, { passive:true });
+$("input").addEventListener("focus", () => {
+  document.body.classList.add("keyboard-open");
+  requestAnimationFrame(() => { autosize(); chat.scrollTop = chat.scrollHeight; });
+});
+$("input").addEventListener("blur", () => document.body.classList.remove("keyboard-open"));
+window.addEventListener("resize", () => requestAnimationFrame(autosize), { passive:true });
+
+/* ---------- AI reply suggestion ---------- */
+/* ---------- Attach menu: Bilder / Ta bild eller video / Välj fil ---------- */
+const sheet = $("sheet");
+const isTouch = matchMedia("(pointer:coarse)").matches;
+$("imgBtn").onclick = e => { e.stopPropagation(); sheet.hidden = !sheet.hidden; };
+document.addEventListener("click", e => { if (!sheet.contains(e.target)) sheet.hidden = true; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") sheet.hidden = true; });
+sheet.querySelectorAll("button").forEach(b => b.onclick = () => {
+  sheet.hidden = true;
+  const a = b.dataset.a;
+  if (a === "lib") $("libInput").click();
+  else if (a === "file") $("fileInput").click();
+  else if (isTouch || !navigator.mediaDevices?.getUserMedia) $("captureInput").click();
+  else openCam();
+});
+for (const id of ["libInput","captureInput","fileInput"])
+  $(id).onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) handleFile(f); };
+
+function handleFile(file){
+  const t = file.type || "";
+  const max = t === "application/pdf" ? 20 : 30;
+  if (file.size > max * 1024 * 1024) { toast(`Filen är för stor. Max ${max} MB i den här versionen.`); return; }
+  if (t.startsWith("image/")) return sendImage(file);
+  if (t.startsWith("video/")) return sendVoice(file, "video");
+  if (t === "application/pdf") return sendPdf(file);
+  if (t.startsWith("text/") || /\.txt$/i.test(file.name)) return file.text().then(s => sendText(s.slice(0, 8000)));
+  toast("That file type is not supported. Choose a photo, video, PDF, or text file.");
+}
+
+const readDataUrl = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+
+/* Normalise any image to a JPEG ≤1600px so Claude always accepts it */
+async function toJpeg(file){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+  const s = Math.min(1, 1600 / Math.max(img.width, img.height));
+  const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url);
+  return c.toDataURL("image/jpeg", .86);
+}
+
+async function sendImage(file){
+  const { to } = langs(); const side = state.speaker;
+  let dataUrl;
+  try { dataUrl = await toJpeg(file); } catch { toast("Bilden gick inte att öppna."); return; }
+  const b = bubble(side, { imgUrl:dataUrl });
+  try {
+    const t = await callClaude(
+      `Read all text in the image and translate it into ${to}. If there is no text, describe the image in one short sentence in ${to}. Output ONLY the result.`,
+      [{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:dataUrl.split(",")[1] } },
+       { type:"text", text:"Translate the text in this image." }], 2000
+    );
+    b.done(t, to, "[bild]");
+  } catch(err){ b.fail("Could not read the image: " + err.message); }
+}
+
+async function sendPdf(file){
+  const { to } = langs(); const side = state.speaker;
+  const b = bubble(side, { original:"📄 " + file.name });
+  try {
+    const data = (await readDataUrl(file)).split(",")[1];
+    const t = await callClaude(
+      `Translate the text of the document into ${to}. Keep paragraph breaks. Output ONLY the translation.`,
+      [{ type:"document", source:{ type:"base64", media_type:"application/pdf", data } },
+       { type:"text", text:"Translate this document." }], 4000
+    );
+    b.done(t, to, "[dokument]");
+  } catch(err){ b.fail("Could not read the PDF: " + err.message); }
+}
+
+/* ---------- In-app camera (desktop) ---------- */
+let camStream = null, camRec = null, camChunks = [], camKeep = false;
+async function openCam(){
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:true })
+      .catch(() => navigator.mediaDevices.getUserMedia({ video:true }));
+  } catch { toast("Kameran gick inte att starta. Tillåt kameran i webbläsaren."); return; }
+  $("camVideo").srcObject = camStream;
+  $("cam").showModal();
+}
+function closeCam(){
+  if (camRec && camRec.state !== "inactive") { camKeep = false; camRec.stop(); }
+  camStream?.getTracks().forEach(t => t.stop()); camStream = null;
+  $("camRec").classList.remove("on"); $("camRec").querySelector("span").textContent = "Spela in video";
+  if ($("cam").open) $("cam").close();
+}
+$("camClose").onclick = closeCam;
+$("cam").addEventListener("cancel", closeCam);
+$("camSnap").onclick = () => {
+  const v = $("camVideo"); if (!v.videoWidth) return;
+  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  c.toBlob(blob => { closeCam(); sendImage(new File([blob], "foto.jpg", { type:"image/jpeg" })); }, "image/jpeg", .9);
+};
+$("camRec").onclick = () => {
+  const btn = $("camRec");
+  if (camRec && camRec.state === "recording") { camKeep = true; camRec.stop(); return; }
+  if (!camStream.getAudioTracks().length) toast("No microphone — the video will be recorded without sound.");
+  camChunks = []; camRec = new MediaRecorder(camStream);
+  camRec.ondataavailable = e => camChunks.push(e.data);
+  camRec.onstop = () => {
+    const blob = new Blob(camChunks, { type:camRec.mimeType || "video/webm" });
+    camRec = null;
+    if (camKeep) { closeCam(); sendVoice(blob, "video"); }
+  };
+  camRec.start(); btn.classList.add("on"); btn.querySelector("span").textContent = "Stoppa";
+};
+
+/* ---------- Voice in: record + Groq Whisper, else browser recognition ---------- */
+let session = null;
+const fmt = s => { s = Math.max(0, Math.round(s || 0)); return `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`; };
+
+$("micBtn").onclick = () => session ? stopRecording() : startRecording();
+
+async function startRecording(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const useGroq = has(KEYS.groq);
+  if (!useGroq && !SR) { toast("Lägg in en Groq-nyckel under ⚙︎ för röst — webbläsaren saknar egen taligenkänning."); return; }
+
+  let stream = null;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio:true }); }
+  catch { if (useGroq) { toast("Mikrofonen gick inte att starta. Tillåt mikrofonen i webbläsaren."); return; } }
+
+  const s = session = { stream, start:Date.now(), transcript:"", useGroq };
+  if (stream) {
+    const chunks = [];
+    s.rec = new MediaRecorder(stream);
+    s.rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    s.blob = new Promise(res => s.rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      res(new Blob(chunks, { type:s.rec.mimeType || "audio/webm" }));
+    });
+    s.rec.start();
+  }
+  if (!useGroq) {
+    s.recog = new SR(); s.recog.lang = L[langs().from].code; s.recog.interimResults = false; s.recog.continuous = true;
+    s.recog.onresult = e => { s.transcript = [...e.results].map(r => r[0].transcript).join(" ").trim(); };
+    s.srDone = new Promise(res => { s.recog.onend = res; s.recog.onerror = res; });
+    s.srDone.then(() => { if (session === s) stopRecording(); });
+    s.recog.start();
+  }
+
+  const input = $("input"), mic = $("micBtn");
+  s.placeholder = input.placeholder;
+  input.disabled = true; mic.classList.add("rec"); mic.setAttribute("aria-label","Stoppa inspelning");
+  const tick = () => { input.placeholder = `Spelar in  ${fmt((Date.now() - s.start)/1000)}  — tryck igen för att skicka`; };
+  tick(); s.timer = setInterval(tick, 250);
+}
+
+async function stopRecording(){
+  const s = session; if (!s) return;
+  session = null;
+  clearInterval(s.timer);
+  const input = $("input"), mic = $("micBtn");
+  input.disabled = false; input.placeholder = s.placeholder;
+  mic.classList.remove("rec"); mic.setAttribute("aria-label","Spela in röst");
+
+  const seconds = (Date.now() - s.start) / 1000;
+  if (s.rec && s.rec.state !== "inactive") s.rec.stop();
+  if (s.recog) { try { s.recog.stop(); } catch {} }
+  const blob = s.blob ? await s.blob : null;
+  if (seconds < 0.6) { toast("Håll inspelningen lite längre."); return; }
+
+  if (s.useGroq) return sendVoiceNote({ blob, seconds });
+  await s.srDone;
+  if (!s.transcript) { toast("Uppfattade inget. Försök igen."); return; }
+  if (!blob) return sendText(s.transcript);
+  sendVoiceNote({ blob, seconds, transcript:s.transcript });
+}
+
+
+/* ---------- Message registry, reactions, reply, delete ---------- */
+const msgData = new WeakMap();
+const EMOJIS = ["👍","❤️","😂","😮","‼️","🤩","😉","🙏","🔥"];
+const who = side => side === "me" ? "Jag" : "Den andra";
+
+function snippet(d){
+  const txt = d.translated || (d.kind === "text" ? d.original : "");
+  if (d.kind === "Röstmeddelande") return `🎤 Röstmeddelande ${fmt(d.seconds)}${txt ? "  " + txt : ""}`;
+  if (d.kind === "Bild") return "📷 Bild" + (txt ? "  " + txt : "");
+  if (d.kind === "Video") return "🎬 Video" + (txt ? "  " + txt : "");
+  return txt;
+}
+
+/* --- Reply bar --- */
+function startReply(div){
+  const d = msgData.get(div); if (!d) return;
+  state.replyTo = div;
+  $("replybar").className = "replybar " + d.side;
+  $("replyWho").textContent = `Svar till ${who(d.side)}`;
+  $("replyText").textContent = snippet(d);
+  $("replybar").hidden = false;
+}
+function clearReply(){ state.replyTo = null; $("replybar").hidden = true; }
+$("replyClose").onclick = clearReply;
+$("replybar").querySelectorAll("[data-r]").forEach(b => b.onclick = e => {
+  e.stopPropagation();
+  const r = b.dataset.r;
+  if (r === "text") $("input").focus();
+  else if (r === "voice") session ? stopRecording() : startRecording();
+  else if (r === "photo") { sheet.hidden = false; }
+  else if (r === "video") (isTouch || !navigator.mediaDevices?.getUserMedia) ? $("captureInput").click() : openCam();
+});
+
+/* Puts a quote of the replied-to message at the top of a new bubble */
+function takeReply(div){
+  const target = state.replyTo;
+  if (!target) return;
+  clearReply();
+  const d = msgData.get(target); if (!d) return;
+  const q = document.createElement("button"); q.className = "quote";
+  q.innerHTML = `<b></b><span></span>`;
+  q.querySelector("b").textContent = who(d.side);
+  q.querySelector("span").textContent = snippet(d);
+  q.onclick = () => {
+    if (!target.isConnected) { toast("The message has been deleted."); return; }
+    target.scrollIntoView({ behavior:"smooth", block:"center" });
+    target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+  };
+  div.prepend(q);
+}
+
+/* --- Reactions --- */
+function react(div, emoji){
+  const d = msgData.get(div);
+  d.reaction = d.reaction === emoji ? null : emoji;
+  div.querySelector(".react")?.remove();
+  div.classList.toggle("has-react", !!d.reaction);
+  if (d.reaction) {
+    const r = document.createElement("button"); r.className = "react"; r.textContent = d.reaction;
+    r.setAttribute("aria-label","Ta bort reaktion"); r.onclick = () => react(div, d.reaction);
+    div.appendChild(r);
+  }
+}
+
+/* --- Delete --- */
+function deleteForMe(div){
+  const d = msgData.get(div), s = state.speaker;
+  d.hiddenFor.add(s); div.classList.add("hide-" + s);
+  if (d.hist) d.hist.hiddenFor = d.hiddenFor;
+  toast(s === "me" ? "Borttaget för dig. Den andra ser det fortfarande." : "Borttaget för Den andra. Jag-läget ser det fortfarande.");
+}
+function deleteForAll(div){
+  const d = msgData.get(div);
+  if (!confirm("Ta bort meddelandet för alla?")) return;
+  state.history = state.history.filter(h => h !== d.hist);
+  if (state.replyTo === div) clearReply();
+  div.remove();
+}
+
+/* --- AI writing assist: preserve the user's voice --- */
+function recentOwnStyle(){
+  return state.history.filter(h => h.side === "me" && h.original).slice(-10).map(h => h.original).join("\n");
+}
+function aiToneInstruction(){
+  if (!state.tone) return "Keep the tone essentially unchanged.";
+  const map={
+    friendly:"Make it only slightly warmer, not more elaborate.",
+    short:"Shorten by roughly 25–40% while keeping the same voice.",
+    professional:"Clean it up lightly, but keep it conversational and human.",
+    formal:"Make it a little more formal without sounding corporate or stiff.",
+    legal:"Make wording clearer and more precise; do not invent legal claims.",
+    romantic:"Add subtle warmth and affection; avoid clichés.",
+    flirty:"Make it subtly playful/flirty; never overdo it.",
+    narrative:"Improve flow slightly without adding facts or flourishes."
+  };
+  return map[state.tone] || "Keep the tone essentially unchanged.";
+}
+async function aiSuggest(focus){
+  if (!CAN_USE_AI) return;
+  const my = $("myLang").value;
+  const btn = $("aiApply"); if(btn){btn.disabled=true; btn.style.opacity=.5;}
+  try {
+    const draft = $("input").value;
+    const ctx = state.history.filter(h => !h.hiddenFor?.has("me")).slice(-10).map(h =>
+      `${h.side === "me" ? "Me" : "Them"}: ${h.side === "me" ? h.original : h.translated}`).join("\n");
+    const style = recentOwnStyle();
+    let sys, user;
+    if (draft.trim()) {
+      sys = `You are a very light-touch mobile chat editor. The user writes in ${my}.\n`+
+        `Preserve the user's voice. Keep their vocabulary, sentence length, punctuation habits, abbreviations, emojis, imperfections and conversational rhythm whenever possible. ${aiToneInstruction()}\n`+
+        `Do not add new ideas, explanations, greetings, conclusions, em dashes, polished AI phrasing or unnecessary politeness. Change as little as possible. Output ONLY the edited message.`;
+      user = `Draft:\n${draft}` + (style ? `\n\nExamples of how this user naturally writes (style reference only):\n${style}` : "");
+    } else {
+      sys = `Help the user write one natural mobile-chat reply in ${my}. ${aiToneInstruction()}\n`+
+        `Match the user's real writing style from the examples. Prefer a short, ordinary human reply over a complete or polished answer. Avoid assistant-like phrasing, summaries, generic empathy, em dashes and unnecessary explanation. Output ONLY the reply.`;
+      user = (ctx ? `Conversation:\n${ctx}` : "There is no conversation yet.") +
+        (focus ? `\n\nReply specifically to:\n${focus.text}` : "") +
+        (style ? `\n\nUser's natural writing examples:\n${style}` : "");
+    }
+    const result = await callClaude(sys,user);
+    // Preserve cursor semantics: only replace after explicit AI action, then put cursor at end.
+    $("input").value=result; autosize(); $("input").focus();
+    try{$("input").setSelectionRange(result.length,result.length);}catch{}
+    updateAiAction();
+  } catch(e){ toast(e.message); }
+  finally{ if(btn){btn.disabled=false; btn.style.opacity="";} }
+}
+function updateAiAction(){
+  const hasDraft=!!$("input").value.trim();
+  if($("aiApply")) $("aiApply").textContent=hasDraft ? "Refine my text" : "Suggest reply";
+  if($("aiHint")) $("aiHint").textContent=hasDraft ? "Small edits. Your rhythm and wording come first." : "Short reply in your own writing style.";
+}
+function setAiTray(open){
+  if (!CAN_USE_AI || !$("aiTray") || !$("aiBtn")) return;
+  $("aiTray").hidden=!open; $("aiBtn").classList.toggle("active",open);
+  if(open) updateAiAction();
+}
+if (CAN_USE_AI) {
+  $("aiBtn").onclick = e => { e.stopPropagation(); setAiTray($("aiTray").hidden); };
+  $("aiClose").onclick = () => setAiTray(false);
+  $("aiApply").onclick = () => aiSuggest();
+  $("input").addEventListener("input", updateAiAction);
+}
+
+function replyWithAi(div){
+  if (!CAN_USE_AI) return;
+  const d = msgData.get(div);
+  const text = d.side === "them" ? d.translated : d.original;
+  if (!text) { toast(d.kind === "Röstmeddelande" ? "Translate the voice message first." : "There is no text to reply to."); return; }
+  startReply(div); setAiTray(true); aiSuggest({ side:d.side, text });
+}
+
+/* --- The ••• popover --- */
+function closeMenu(){ document.querySelectorAll(".popback,.pop").forEach(e => e.remove()); }
+function openMenu(div, anchor){
+  closeMenu();
+  const d = msgData.get(div); if (!d) return;
+  const back = document.createElement("div"); back.className = "popback"; back.onclick = closeMenu;
+  const pop = document.createElement("div"); pop.className = "pop"; pop.setAttribute("role","menu");
+  pop.innerHTML = `<div class="reacts"><div class="emo"></div><button class="x" aria-label="Stäng">×</button></div><div class="items"></div>`;
+  EMOJIS.forEach(e => {
+    const b = document.createElement("button"); b.textContent = e; b.setAttribute("aria-pressed", d.reaction === e);
+    b.onclick = () => { closeMenu(); react(div, e); };
+    pop.querySelector(".emo").appendChild(b);
+  });
+  pop.querySelector(".x").onclick = closeMenu;
+  const items = pop.querySelector(".items");
+  const item = (label, fn, cls) => {
+    const b = document.createElement("button"); b.textContent = label; if (cls) b.className = cls;
+    b.onclick = () => { closeMenu(); fn(); }; items.appendChild(b);
+  };
+  item(t("reply"), () => startReply(div));
+  if (d.original) item(div.classList.contains("show-original") ? t("hideOriginal") : t("showOriginal"), () => div.classList.toggle("show-original"));
+  if (CAN_USE_AI) item(t("replyAI"), () => replyWithAi(div));
+  if (d.kind === "Röstmeddelande" && d.translated) item("Listen to translation", () => speak(d.translated, d.lang, anchor));
+  if (d.translated) item("Kopiera", () => navigator.clipboard.writeText(d.translated).then(() => toast(t("copied"))));
+  if (d.url) item("Save audio file", () => {
+    const a = document.createElement("a"); a.href = d.url;
+    a.download = `tolk-${new Date().toISOString().slice(0,16).replace(/[:T]/g,"-")}.${d.blob?.type.includes("mp4") ? "m4a" : "webm"}`;
+    a.click();
+  });
+  item("Ta bort för mig", () => deleteForMe(div), "danger");
+  item("Ta bort för alla", () => deleteForAll(div), "danger");
+
+  pop.style.visibility = "hidden";
+  document.body.append(back, pop);
+  const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  let top = r.top - h - 8; if (top < 8) top = Math.min(r.bottom + 8, innerHeight - h - 8);
+  const left = Math.min(Math.max(8, d.side === "me" ? r.right - w : r.left - 24), innerWidth - w - 8);
+  pop.style.top = Math.max(8, top) + "px"; pop.style.left = left + "px"; pop.style.visibility = "";
+  pop.querySelector(".emo button").focus();
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+
+/* ---------- Voice note: voice first, translation on demand ---------- */
+const hhmm = () => new Date().toLocaleTimeString("sv-SE", { hour:"2-digit", minute:"2-digit" });
+
+async function transcribe(blob, from){
+  const form = new FormData();
+  const ext = (blob.type.includes("mp4") || blob.type.includes("quicktime")) ? "mp4" : "webm";
+  form.append("file", blob, `audio.${ext}`);
+  form.append("model", "whisper-large-v3");
+  form.append("language", L[from].code.slice(0,2));
+  const res = await fetchTimeout("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method:"POST", headers:{ Authorization:"Bearer " + KEYS.groq }, body:form
+  }, 45000);
+  const data = await jsonOrError(res);
+  return data.text.trim();
+}
+
+function sendVoiceNote({ blob, seconds, transcript = "" }){
+  $("empty")?.remove();
+  const side = state.speaker, { from, to } = langs();
+  const url = URL.createObjectURL(blob);
+  let original = transcript, translated = "";
+
+  const div = document.createElement("div");
+  div.className = "msg vmsg " + side;
+  const data = { side, kind:"Röstmeddelande", original:transcript, translated:"", lang:to, seconds, url, blob, hist:null, hiddenFor:new Set() };
+  msgData.set(div, data);
+  div.appendChild(voicePlayer(url, seconds));
+
+  const body = document.createElement("div"); body.className = "vtr"; body.hidden = true;
+  const tr = document.createElement("div"); tr.className = "tr";
+  const orig = document.createElement("div"); orig.className = "orig";
+  body.append(tr, orig);
+
+  const link = document.createElement("button");
+  link.className = "translink"; link.textContent = "Translate voice";
+
+  const foot = document.createElement("div"); foot.className = "vfoot";
+  foot.innerHTML = `<time>${hhmm()}</time><button class="more" aria-label="Fler val" aria-haspopup="menu">•••</button>`;
+
+  div.append(body, link, foot);
+  takeReply(div);
+  chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
+
+  link.onclick = async () => {
+    if (translated) {                       // toggle show / hide
+      body.hidden = !body.hidden;
+      link.textContent = body.hidden ? "Visa översättning" : "Dölj översättning";
+      return;
+    }
+    link.disabled = true; link.textContent = "Translating…";
+    try {
+      if (!original) {
+        if (!has(KEYS.groq)) throw new Error("Lägg in en Groq-nyckel under ⚙︎.");
+        original = await transcribe(blob, from);
+      }
+      translated = await translate(original, from, to, side);
+      tr.textContent = translated;
+      orig.textContent = original;
+      body.hidden = false;
+      link.textContent = "Dölj översättning";
+      data.original = original; data.translated = translated;
+      data.hist = { side, original, translated, hiddenFor:data.hiddenFor }; state.history.push(data.hist);
+      chat.scrollTop = chat.scrollHeight;
+    } catch(e){
+      link.textContent = "Försök igen";
+      toast("Could not translate: " + e.message);
+    }
+    link.disabled = false;
+  };
+
+  foot.querySelector(".more").onclick = e => { e.stopPropagation(); openMenu(div, e.currentTarget); };
+}
+
+/* ---------- Voice message player: play, waveform, length ---------- */
+let audioCtx = null, playingVoice = null;
+const BARS = 32;
+
+function voicePlayer(url, knownSeconds){
+  const el = document.createElement("div"); el.className = "voice";
+  el.innerHTML = `
+    <button class="vplay" aria-label="Spela upp röstmeddelande">
+      <svg class="i-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>
+      <svg class="i-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.2"/><rect x="14" y="4" width="4" height="16" rx="1.2"/></svg>
+    </button>
+    <div class="wave" role="slider" aria-label="Spola" tabindex="0"></div>
+    <span class="vtime">${fmt(knownSeconds)}</span>`;
+  const wave = el.querySelector(".wave"), time = el.querySelector(".vtime"), btn = el.querySelector(".vplay");
+  // Placeholder shape until the real waveform is decoded
+  const bars = Array.from({ length:BARS }, (_, i) => {
+    const b = document.createElement("span");
+    b.style.height = (30 + 25 * Math.abs(Math.sin(i * 1.7))) + "%";
+    wave.appendChild(b); return b;
+  });
+
+  const audio = new Audio(url);
+  let duration = knownSeconds || 0, raf = 0;
+
+  (async () => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const buf = await audioCtx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+      duration = buf.duration;
+      const data = buf.getChannelData(0), step = Math.floor(data.length / BARS) || 1;
+      const peaks = bars.map((_, i) => {
+        let sum = 0; for (let j = i*step; j < Math.min((i+1)*step, data.length); j++) sum += data[j]*data[j];
+        return Math.sqrt(sum / step);
+      });
+      const max = Math.max(...peaks) || 1;
+      bars.forEach((b, i) => b.style.height = (14 + 86 * Math.pow(peaks[i] / max, .7)) + "%");
+      if (audio.paused) time.textContent = fmt(duration);
+    } catch {}
+  })();
+
+  const paint = () => {
+    const p = duration ? audio.currentTime / duration : 0;
+    const n = Math.round(p * BARS);
+    bars.forEach((b, i) => b.classList.toggle("on", i < n));
+    wave.setAttribute("aria-valuenow", Math.round(p * 100));
+    time.textContent = fmt(audio.paused && !audio.currentTime ? duration : audio.currentTime);
+  };
+  const loop = () => { paint(); raf = requestAnimationFrame(loop); };
+  const stopped = () => { cancelAnimationFrame(raf); el.classList.remove("playing"); paint(); };
+
+  btn.onclick = () => {
+    if (audio.paused) {
+      if (playingVoice && playingVoice !== audio) playingVoice.pause();
+      playingVoice = audio; audio.play(); el.classList.add("playing"); loop();
+    } else audio.pause();
+  };
+  audio.onpause = stopped;
+  audio.onended = () => { audio.currentTime = 0; stopped(); };
+  const seek = x => {
+    const r = wave.getBoundingClientRect();
+    if (duration) { audio.currentTime = Math.min(.999, Math.max(0, (x - r.left) / r.width)) * duration; paint(); }
+  };
+  wave.onclick = e => seek(e.clientX);
+  wave.onkeydown = e => {
+    if (!duration) return;
+    if (e.key === "ArrowRight") { audio.currentTime = Math.min(duration, audio.currentTime + 2); paint(); }
+    if (e.key === "ArrowLeft")  { audio.currentTime = Math.max(0, audio.currentTime - 2); paint(); }
+  };
+  return el;
+}
+
+async function sendVoice(blob, kind = "audio", seconds){
+  const { from, to } = langs(); const side = state.speaker;
+  const url = URL.createObjectURL(blob);
+  const b = bubble(side, kind === "video" ? { videoUrl:url } : { audioUrl:url, seconds });
+  if (!has(KEYS.groq)) {
+    b.fail(kind === "video" ? "Lägg in en Groq-nyckel under ⚙︎ för att översätta tal i video." : "Lägg in en Groq-nyckel under ⚙︎.");
+    return;
+  }
+  try {
+    const form = new FormData();
+    const ext = (blob.type.includes("mp4") || blob.type.includes("quicktime")) ? "mp4" : "webm";
+    form.append("file", blob, blob.name || `${kind}.${ext}`);
+    form.append("model", "whisper-large-v3");
+    form.append("language", L[from].code.slice(0,2));
+    const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method:"POST", headers:{ Authorization:"Bearer " + KEYS.groq }, body:form
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.text.trim();
+    b.setOriginal(text);
+    const t = await translate(text, from, to);
+    b.done(t, to, text);
+  } catch(e){ b.fail("Kunde inte tolka talet: " + e.message); }
+}
+
+/* ---------- Voice out: ElevenLabs, else browser ---------- */
+let current = null;
+async function speak(text, lang, btn){
+  if (current) { current.stop(); }
+  btn.classList.add("playing");
+  const end = () => btn.classList.remove("playing");
+  try {
+    if (has(KEYS.eleven)) {
+      const res = await fetchTimeout(`https://api.elevenlabs.io/v1/text-to-speech/${KEYS.voice}`, {
+        method:"POST",
+        headers:{ "xi-api-key":KEYS.eleven, "content-type":"application/json" },
+        body:JSON.stringify({ text, model_id:"eleven_multilingual_v2" })
+      }, 30000);
+      if (!res.ok) throw new Error("ElevenLabs svarade " + res.status);
+      const a = new Audio(URL.createObjectURL(await res.blob()));
+      a.onended = end; current = { stop(){ a.pause(); end(); } }; await a.play();
+    } else {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = L[lang].code; u.onend = end; u.onerror = end;
+      speechSynthesis.cancel(); speechSynthesis.speak(u);
+      current = { stop(){ speechSynthesis.cancel(); end(); } };
+    }
+  } catch(e){ end(); toast(e.message); }
+}
+
+
+
+/* ---------- Connecting v7 role UI + localization ---------- */
+function setText(selector, value){
+  const el = document.querySelector(selector);
+  if (el) el.textContent = value;
+}
+function setLabel(selector, value){
+  const el = document.querySelector(selector);
+  if (el) el.setAttribute("aria-label", value);
+}
+function fillSelectWithOptions(sel, options, selected){
+  if (!sel) return;
+  sel.innerHTML = "";
+  for (const lang of options) sel.add(new Option(`${FLAG[lang]||"🌐"} ${L[lang].name}`, lang));
+  sel.value = options.includes(selected) ? selected : options[0];
+}
+function applyRoleUi(){
+  document.documentElement.lang = UI_LOCALE;
+  document.body.dataset.role = ROLE.id;
+  document.body.dataset.locale = UI_LOCALE;
+
+  setText("#empty h2", t("emptyTitle"));
+  setText("#emptyText", t("emptyText"));
+  setLabel("#settingsBtn", t("settings"));
+  setLabel("#profileBtn", t("profile"));
+  setLabel("#sendBtn", t("send"));
+  setLabel("#micBtn", t("record"));
+  setLabel("#imgBtn", t("attach"));
+
+  const navs=[...document.querySelectorAll(".navbtn")];
+  navs.forEach(btn=>{
+    const span=btn.querySelector("span");
+    if (!span) return;
+    span.textContent = btn.dataset.view==="chatView" ? t("chat") : t("translate");
+  });
+
+  // B is intentionally chat-only: no Translate tab, no Translate DOM, more room for conversation.
+  if (!CAN_TRANSLATE_TOOL){
+    document.querySelector('[data-view="translateView"]')?.remove();
+    $("translateView")?.remove();
+    document.querySelector(".bottomnav")?.remove();
+    document.body.classList.add("chat-only");
+  }
+
+  // AI exists only for A.
+  if (CAN_USE_AI){
+    setText("#aiTray .ai-head b", "✨ " + t("writingAssist"));
+    setText("#aiTray .ai-head span", t("writingAssistSub"));
+  }
+
+  // Russian/localized chat controls for B.
+  const chips = document.querySelectorAll("#replybar [data-r]");
+  const chipKeys = ["text","voice","photo","video"];
+  chips.forEach((b,i)=>{ if(chipKeys[i]) b.textContent=t(chipKeys[i]); });
+
+  // Translate UI labels are owner-only.
+  if (CAN_TRANSLATE_TOOL){
+    setText("#trGo", t("translateAction"));
+    setText("#trPaste", t("paste"));
+    setText("#trClear", t("clear"));
+    setText("#trListen", t("listen"));
+    setText("#trCopy", t("copy"));
+    if ($("trResult")?.classList.contains("empty")) $("trResult").textContent=t("translationPlaceholder");
+  }
+
+  // Settings: contact sees language prefs only. Owner sees service keys + language prefs.
+  setText("#settings h3", t("settings"));
+  setText("#settings .profilelangs h4", t("chatLanguages"));
+  const rows=[...document.querySelectorAll("#settings .langrow span")];
+  [t("youWrite"),t("youRead"),t("peerWrites"),t("peerReads")].forEach((v,i)=>{ if(rows[i]) rows[i].textContent=v; });
+  setText("#saveKeys", t("saveSettings"));
+  setText("#cancelKeys", t("cancel"));
+
+  if (!IS_OWNER){
+    // Hide owner-only API credentials from B completely.
+    const firstProfile = document.querySelector("#settings .profilelangs");
+    if (firstProfile){
+      let n = document.querySelector("#settings p");
+      while(n && n.nextElementSibling && n.nextElementSibling !== firstProfile){
+        const next=n.nextElementSibling;
+        if (next.tagName==="LABEL" || (next.tagName==="INPUT" && ["kClaude","kGroq","kEleven","kVoice"].includes(next.id))) next.style.display="none";
+        n=next;
+      }
+    }
+    const p=document.querySelector("#settings > p");
+    if(p) p.textContent="Языки чата сохраняются на этом устройстве.";
+  }
+}
+
+function configureRoleLanguageSettings(){
+  const ownWrite = store.get(`connecting-${ROLE.id.toLowerCase()}-write`) || ROLE.defaultWrite;
+  const ownRead  = store.get(`connecting-${ROLE.id.toLowerCase()}-read`) || ROLE.defaultRead;
+  const peerWrite= store.get(`connecting-${ROLE.peer.toLowerCase()}-write`) || ROLE.peerDefaultWrite;
+  const peerRead = store.get(`connecting-${ROLE.peer.toLowerCase()}-read`) || ROLE.peerDefaultRead;
+
+  fillSelectWithOptions($("profileMe"), ROLE.writeOptions, ownWrite);
+  fillSelectWithOptions($("profileMeRead"), ROLE.readOptions, ownRead);
+  const peerRole = IS_OWNER
+    ? {writeOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese"],readOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese"]}
+    : {writeOptions:["Swedish","English"],readOptions:["Swedish","English"]};
+  fillSelectWithOptions($("profileThemWrite"), peerRole.writeOptions, peerWrite);
+  fillSelectWithOptions($("profileThem"), peerRole.readOptions, peerRead);
+}
+
+function applyProfileLanguagesV7(){
+  const ownWrite=$("profileMe").value, ownRead=$("profileMeRead").value;
+  const peerWrite=$("profileThemWrite").value, peerRead=$("profileThem").value;
+  store.set(`connecting-${ROLE.id.toLowerCase()}-write`,ownWrite);
+  store.set(`connecting-${ROLE.id.toLowerCase()}-read`,ownRead);
+  store.set(`connecting-${ROLE.peer.toLowerCase()}-write`,peerWrite);
+  store.set(`connecting-${ROLE.peer.toLowerCase()}-read`,peerRead);
+  $("myLang").value=ownWrite;
+  $("theirLang").value=peerRead;
+  refresh();
+}
+
+/* ---------- Connecting v4 navigation + pure translation ---------- */
+const FLAG = {Swedish:"🇸🇪",English:"🇬🇧",Norwegian:"🇳🇴",Danish:"🇩🇰",Finnish:"🇫🇮",German:"🇩🇪",French:"🇫🇷",Spanish:"🇪🇸",Icelandic:"🇮🇸",Portuguese:"🇵🇹",Russian:"🇷🇺",Ukrainian:"🇺🇦",Polish:"🇵🇱",Estonian:"🇪🇪",Latvian:"🇱🇻",Lithuanian:"🇱🇹",Georgian:"🇬🇪",Armenian:"🇦🇲"};
+
+document.querySelectorAll(".navbtn").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".navbtn").forEach(b => b.classList.toggle("active", b === btn));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === btn.dataset.view));
+  if (btn.dataset.view === "translateView") setTimeout(() => $("trInput").focus({preventScroll:true}), 80);
+}));
+
+function fillTranslateLanguages(){
+  for (const [v,n] of LANGS) {
+    $("trFrom").add(new Option(`${FLAG[v]||"🌐"} ${n}`, v));
+    $("trTo").add(new Option(`${FLAG[v]||"🌐"} ${n}`, v));
+  }
+  const savedFrom = store.get("connecting-tr-from") || "Swedish";
+  const savedTo = store.get("connecting-tr-to") || "Russian";
+  $("trFrom").value = L[savedFrom] ? savedFrom : "Swedish";
+  $("trTo").value = L[savedTo] ? savedTo : "Russian";
+  updateTranslateLangUi();
+}
+function updateTranslateLangUi(){
+  const f=$("trFrom").value,t=$("trTo").value;
+  $("trFromFlag").textContent=FLAG[f]||"🌐"; $("trFromName").textContent=L[f].name;
+  $("trToFlag").textContent=FLAG[t]||"🌐"; $("trToName").textContent=L[t].name; $("trResultLang").textContent=FLAG[t]||"🌐";
+  $("trInput").lang=L[f].code; store.set("connecting-tr-from",f); store.set("connecting-tr-to",t);
+}
+$("trFrom").onchange=updateTranslateLangUi; $("trTo").onchange=updateTranslateLangUi;
+$("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.textContent; $("trCount").textContent=$("trInput").value.length; r.textContent=t("translationPlaceholder"); r.classList.add("empty"); } };
+$("trInput").addEventListener("input",()=>{$("trCount").textContent=$("trInput").value.length;});
+$("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); $("trInput").focus();};
+$("trPaste").onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ $("trInput").value=t.slice(0,12000); $("trCount").textContent=$("trInput").value.length; $("trInput").focus(); } }catch{ toast("Tillåt åtkomst till urklipp, eller klistra in manuellt."); } };
+async function translatePlain(text,from,to){
+  if(from===to) return text;
+  return callClaude(`You are a precise translator. Translate from ${from} to ${to}. Preserve meaning, paragraph breaks, names, numbers and tone. Output ONLY the translation, with no commentary.`, text, 4000);
+}
+$("trGo").onclick=async()=>{
+  const text=$("trInput").value.trim(); if(!text) return;
+  const btn=$("trGo"); btn.disabled=true; btn.textContent=t("translating");
+  try{ const out=await translatePlain(text,$("trFrom").value,$("trTo").value); $("trResult").textContent=out; $("trResult").classList.remove("empty"); }
+  catch(e){ toast("Could not translate: "+e.message); }
+  finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
+};
+$("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").textContent); toast("Translation copied."); }catch{ toast("Could not copy."); } };
+$("trListen").onclick=()=>{ if($("trResult").classList.contains("empty")) return; speak($("trResult").textContent,$("trTo").value,$("trListen")); };
+
+/* Chat language profile: role-aware and intentionally limited per person. */
+configureRoleLanguageSettings();
+["profileMe","profileMeRead","profileThemWrite","profileThem"].forEach(id=>$(id).onchange=applyProfileLanguagesV7);
+$("profileBtn").onclick=()=>$("settingsBtn").click();
+
+if (CAN_TRANSLATE_TOOL) fillTranslateLanguages();
+applyRoleUi();
+applyProfileLanguagesV7();
+
+
+onlineState();
+refresh();
+console.info(`[Connecting] role=${ROLE.id} ui=${UI_LOCALE} privateAI=${CAN_USE_AI} translateTool=${CAN_TRANSLATE_TOOL}`);
+
+addEventListener("pagehide", () => { try { if (session) stopRecording(); } catch {} try { closeCam(); } catch {} });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ============================================================
+   Connecting v8 — Supabase Realtime backend
+   Publishable key is intentionally public-safe.
+   ============================================================ */
+const CONNECTING_SUPABASE_URL = "https://xxxsdcgrpjhurtfvsboi.supabase.co";
+const CONNECTING_SUPABASE_KEY = "sb_publishable_WQ36Wrx3E4fzTSxJebU_aA_AqV4TcZT";
+
+const RTC = {
+  sb:null, session:null, user:null, profile:null,
+  conversationId:null, member:null, peerMember:null, peerProfile:null,
+  channel:null, ready:false, seen:new Set(), peerPresence:null,
+  heartbeat:null, presenceClock:null
+};
+
+function rtcStatus(msg, kind=""){
+  try { setStatus(msg, kind); } catch {}
+}
+
+function rtcError(err, fallback="Realtime error"){
+  console.error("[Connecting Realtime]", err);
+  const msg = err?.message || fallback;
+  rtcStatus(msg, "bad");
+  toast(msg);
+}
+
+function rtcUuid(){
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0,v=c==="x"?r:(r&3|8); return v.toString(16);
+  });
+}
+
+async function rtcEnsureSession(){
+  const { data:{ session } } = await RTC.sb.auth.getSession();
+  if (session) return session;
+
+  const { data, error } = await RTC.sb.auth.signInAnonymously();
+  if (error) {
+    throw new Error(
+      "Anonymous sign-in is not enabled in Supabase yet. Enable Anonymous Sign-Ins under Auth → Providers once, then reload."
+    );
+  }
+  return data.session;
+}
+
+async function rtcLoadProfile(){
+  const { data, error } = await RTC.sb
+    .from("connecting_profiles")
+    .select("user_id,role_code,display_name,ui_locale")
+    .eq("user_id", RTC.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function rtcClaimInviteIfNeeded(){
+  let profile = await rtcLoadProfile();
+  if (profile) return profile;
+
+  const params = new URLSearchParams(location.search);
+  const invite = params.get("invite");
+  if (!invite) throw new Error("Open Connecting with your private invite link on this device.");
+
+  const { data, error } = await RTC.sb.rpc("connecting_claim_invite", { p_token: invite });
+  if (error) throw error;
+  if (!data?.[0]) throw new Error("Invite could not be claimed.");
+
+  params.delete("invite");
+  history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params.toString() : ""));
+  return await rtcLoadProfile();
+}
+
+function rtcEnforceRole(){
+  const actual = RTC.profile?.role_code;
+  if (!actual) return false;
+  if (actual === ROLE.id) return false;
+
+  const params = new URLSearchParams(location.search);
+  params.set("user", actual);
+  params.delete("invite");
+  location.replace(location.pathname + "?" + params.toString());
+  return true;
+}
+
+async function rtcLoadMembership(){
+  const { data, error } = await RTC.sb
+    .from("connecting_members")
+    .select("conversation_id,user_id,write_language,read_language,joined_at")
+    .eq("user_id", RTC.user.id)
+    .order("joined_at",{ascending:true})
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("No Connecting conversation is assigned to this profile.");
+  RTC.member = data;
+  RTC.conversationId = data.conversation_id;
+
+  const { data: members, error: membersError } = await RTC.sb
+    .from("connecting_members")
+    .select("conversation_id,user_id,write_language,read_language,joined_at")
+    .eq("conversation_id", RTC.conversationId);
+  if (membersError) throw membersError;
+  RTC.peerMember = (members || []).find(m => m.user_id !== RTC.user.id) || null;
+
+  if (RTC.peerMember) {
+    const { data: peerProfile } = await RTC.sb
+      .from("connecting_profiles")
+      .select("user_id,role_code,display_name,ui_locale")
+      .eq("user_id", RTC.peerMember.user_id)
+      .maybeSingle();
+    RTC.peerProfile = peerProfile || null;
+  }
+
+  // Backend preferences are authoritative for the signed-in user's own languages.
+  if (RTC.member.write_language && $("myLang")) $("myLang").value = RTC.member.write_language;
+  if (RTC.peerMember?.read_language && $("theirLang")) $("theirLang").value = RTC.peerMember.read_language;
+  refresh();
+
+  const label = RTC.peerProfile?.display_name || (RTC.peerProfile?.role_code === "A" ? "A" : "Contact");
+  if ($("contactLabel")) $("contactLabel").textContent = label;
+}
+
+async function rtcSyncOwnLanguagePrefs(){
+  if (!RTC.ready || !RTC.member) return;
+  const write = $("profileMe")?.value || $("myLang")?.value || RTC.member.write_language;
+  const read  = $("profileMeRead")?.value || RTC.member.read_language;
+  const { error } = await RTC.sb
+    .from("connecting_members")
+    .update({ write_language:write, read_language:read })
+    .eq("conversation_id",RTC.conversationId)
+    .eq("user_id",RTC.user.id);
+  if (!error) {
+    RTC.member.write_language=write;
+    RTC.member.read_language=read;
+  }
+}
+
+function rtcTranslationCacheKey(messageId, lang){
+  return `connecting-msg-translation:${messageId}:${lang}`;
+}
+
+async function rtcReadableText(row){
+  const mine = row.sender_id === RTC.user.id;
+  if (mine) return { text:row.original_text || "", lang:row.original_language || RTC.member?.write_language || "English" };
+
+  const readLang = RTC.member?.read_language || $("profileMeRead")?.value || ROLE.defaultRead;
+
+  if (row.translated_text && row.translated_language === readLang) {
+    return { text:row.translated_text, lang:readLang };
+  }
+  if (row.original_language === readLang || !row.original_language) {
+    return { text:row.original_text || "", lang:row.original_language || readLang };
+  }
+
+  // Only A owns the private AI/translation key. B never needs an API key.
+  if (IS_OWNER && has(KEYS.claude) && row.original_text) {
+    const ck = rtcTranslationCacheKey(row.id,readLang);
+    const cached = store.get(ck);
+    if (cached) return { text:cached, lang:readLang };
+    try {
+      const translated = await translatePlain(row.original_text,row.original_language,readLang);
+      store.set(ck,translated);
+      return { text:translated, lang:readLang };
+    } catch(e) {
+      console.warn("Incoming translation failed",e);
+    }
+  }
+
+  return { text:row.original_text || "", lang:row.original_language || readLang };
+}
+
+async function rtcRenderMessage(row){
+  if (!row?.id || RTC.seen.has(row.id)) return;
+  RTC.seen.add(row.id);
+
+  const side = row.sender_id === RTC.user.id ? "me" : "them";
+  const readable = await rtcReadableText(row);
+  const b = bubble(side,{ original:row.original_text || "" });
+  b.done(readable.text, readable.lang, row.original_text || "");
+}
+
+async function rtcLoadHistory(){
+  const { data, error } = await RTC.sb
+    .from("connecting_messages")
+    .select("id,conversation_id,sender_id,client_id,kind,original_text,original_language,translated_text,translated_language,reply_to,created_at")
+    .eq("conversation_id",RTC.conversationId)
+    .order("created_at",{ascending:true})
+    .limit(500);
+  if (error) throw error;
+
+  for (const row of data || []) await rtcRenderMessage(row);
+}
+
+function rtcPaintPresence(){
+  const p=RTC.peerPresence;
+  const status=$("contactStatus"), dot=$("contactDot");
+  if (!status || !dot) return;
+
+  let online=false, last=null;
+  if (p?.last_seen) {
+    last=new Date(p.last_seen);
+    online=!!p.is_online && (Date.now()-last.getTime()) < 45000;
+  }
+
+  if (online) {
+    status.textContent=t("online");
+    dot.style.background="var(--ok)";
+    dot.style.boxShadow="0 0 0 4px rgba(121,230,177,.08)";
+  } else {
+    status.textContent = last
+      ? `${t("lastSeen")} ${last.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`
+      : t("offline");
+    dot.style.background="var(--mute)";
+    dot.style.boxShadow="none";
+  }
+}
+
+async function rtcRefreshPresence(){
+  if (!RTC.peerMember) { rtcPaintPresence(); return; }
+  const { data, error } = await RTC.sb
+    .from("connecting_presence")
+    .select("conversation_id,user_id,is_online,last_seen,updated_at")
+    .eq("conversation_id",RTC.conversationId)
+    .eq("user_id",RTC.peerMember.user_id)
+    .maybeSingle();
+  if (!error) RTC.peerPresence=data || null;
+  rtcPaintPresence();
+}
+
+async function rtcTouchPresence(online=true){
+  if (!RTC.ready) return;
+  try {
+    await RTC.sb.rpc("connecting_touch_presence",{
+      p_conversation:RTC.conversationId,
+      p_online:online    });
+  } catch {}
+}
+
+function rtcStartPresence(){
+  rtcTouchPresence(true);
+  RTC.heartbeat=setInterval(()=>rtcTouchPresence(document.visibilityState==="visible"),20000);
+  RTC.presenceClock=setInterval(rtcPaintPresence,5000);
+
+  document.addEventListener("visibilitychange",()=>{
+    rtcTouchPresence(document.visibilityState==="visible");
+  });
+  addEventListener("pagehide",()=>{ rtcTouchPresence(false); });
+}
+
+function rtcSubscribe(){
+  if (RTC.channel) RTC.sb.removeChannel(RTC.channel);
+
+  RTC.channel = RTC.sb
+    .channel(`connecting:${RTC.conversationId}`)
+    .on("postgres_changes",{
+      event:"INSERT",schema:"public",table:"connecting_messages",
+      filter:`conversation_id=eq.${RTC.conversationId}`
+    }, payload => rtcRenderMessage(payload.new))
+    .on("postgres_changes",{
+      event:"*",schema:"public",table:"connecting_presence",
+      filter:`conversation_id=eq.${RTC.conversationId}`
+    }, payload => {
+      const row=payload.new || payload.old;
+      if (row?.user_id === RTC.peerMember?.user_id) {
+        RTC.peerPresence=payload.new || RTC.peerPresence;
+        rtcPaintPresence();
+      }
+    })
+    .subscribe((status,err)=>{
+      if (status==="SUBSCRIBED") rtcStatus(t("ready"),"ok");
+      else if (status==="CHANNEL_ERROR" || status==="TIMED_OUT") rtcStatus("Reconnecting…","bad");
+      if (err) console.warn("Realtime channel",status,err);
+    });
+}
+
+/* Override the prototype send function with the real backend send path. */
+sendText = async function(textArg,{audioUrl,seconds}={}){
+  const text=(textArg ?? $("input").value).trim();
+  if (!text) return;
+  if (!RTC.ready) { toast("Connecting is still starting…"); return; }
+
+  const route=routeOutgoingMessage(text);
+  const btn=$("sendBtn");
+  btn.disabled=true; btn.classList.add("pending"); btn.setAttribute("aria-busy","true");
+
+  try {
+    let translated=null,translatedLang=null;
+
+    // A translates outbound messages for B before storing them.
+    // B sends its original language; A translates incoming messages privately on receipt.
+    if (IS_OWNER && route.needsTranslation) {
+      translated=await translatePlain(text,route.from,route.to);
+      translatedLang=route.to;
+    } else if (!route.needsTranslation) {
+      translated=text; translatedLang=route.to;
+    }
+
+    const { data,error }=await RTC.sb.rpc("connecting_send_message",{
+      p_conversation:RTC.conversationId,
+      p_client_id:rtcUuid(),
+      p_kind:audioUrl ? "voice" : "text",
+      p_original_text:text,
+      p_original_language:route.from,
+      p_translated_text:translated,
+      p_translated_language:translatedLang,
+      p_reply_to:null
+    });
+    if (error) throw error;
+
+    if (!textArg) { $("input").value=""; autosize(); }
+    if (data) await rtcRenderMessage(data);
+  } catch(e) {
+    rtcError(e,"Could not send message.");
+  } finally {
+    btn.disabled=false; btn.classList.remove("pending"); btn.removeAttribute("aria-busy");
+  }
+};
+
+async function rtcInit(){
+  try {
+    if (!window.supabase?.createClient) throw new Error("Supabase client could not load.");
+    $("sendBtn").disabled=true;
+    rtcStatus("Connecting…");
+
+    RTC.sb=window.supabase.createClient(CONNECTING_SUPABASE_URL,CONNECTING_SUPABASE_KEY,{
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
+    });
+
+    RTC.session=await rtcEnsureSession();
+    RTC.user=RTC.session.user;
+    RTC.profile=await rtcClaimInviteIfNeeded();
+
+    if (rtcEnforceRole()) return;
+
+    await rtcLoadMembership();
+    RTC.ready=true;
+    $("sendBtn").disabled=false;
+
+    await rtcLoadHistory();
+    await rtcRefreshPresence();
+    rtcSubscribe();
+    rtcStartPresence();
+
+    // Keep the user's own language settings in Supabase as well as locally.
+    ["profileMe","profileMeRead"].forEach(id=>{
+      $(id)?.addEventListener("change",()=>setTimeout(rtcSyncOwnLanguagePrefs,0));
+    });
+
+    rtcStatus(t("ready"),"ok");
+    console.info("[Connecting] realtime ready",{
+      role:RTC.profile.role_code,
+      conversation:RTC.conversationId,
+      user:RTC.user.id
+    });
+  } catch(e) {
+    rtcError(e,"Could not start Connecting realtime.");
+    $("sendBtn").disabled=true;
+  }
+}
+
+rtcInit();
+</script>
+
+</body>
+</html>
