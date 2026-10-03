@@ -62,13 +62,6 @@ document.addEventListener("DOMContentLoaded", function () {
     console.warn("Italian language option could not be added", error);
   }
 
-  // Never ask the phone user for provider credentials.
-  if (typeof window.callClaude === "function") {
-    window.callClaude = async function () {
-      throw new Error("Translation service is not connected yet.");
-    };
-  }
-
   // Place Online at far left of the Connecting header on the same row.
   var headerTop = document.querySelector(".connect-top");
   var contactRow = document.querySelector(".connect-contact");
