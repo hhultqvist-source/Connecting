@@ -82,10 +82,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var presenceStyle = document.createElement("style");
   presenceStyle.textContent =
-    ".connect-top{grid-template-columns:auto 1fr 44px!important}" +
-    "#onlineInline{display:flex;align-items:center;gap:7px;justify-self:start;font-size:12.5px;color:var(--mute);white-space:nowrap}" +
+    ".connect-top{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;width:100%!important;gap:12px!important}" +
+    "#onlineInline{grid-column:1;display:flex;align-items:center;gap:7px;justify-self:start;font-size:12.5px;color:var(--mute);white-space:nowrap}" +
     "#onlineInline .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}" +
-    ".connect-mark{justify-self:center}";
+    ".connect-mark{grid-column:2;justify-self:center!important;text-align:center!important}" +
+    "#settingsBtn{grid-column:3;justify-self:end!important;margin:0!important}";
   document.head.appendChild(presenceStyle);
 
   var settings = document.getElementById("settings");
