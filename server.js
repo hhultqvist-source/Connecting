@@ -15,7 +15,7 @@ async function handleClaude(req,res){
   let raw="";
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 100000) {
+    if (raw.length > 8 * 1024 * 1024) {
       res.writeHead(413,{"Content-Type":"application/json; charset=utf-8"});
       return res.end(JSON.stringify({message:"Request too large."}));
     }
@@ -29,9 +29,11 @@ async function handleClaude(req,res){
   }
 
   const system = String(body.system || "").slice(0,20000);
-  const content = String(body.content || "").slice(0,30000);
+  const content = Array.isArray(body.content)
+    ? body.content
+    : String(body.content || "").slice(0,30000);
   const maxTokens = Math.max(64, Math.min(Number(body.maxTokens) || 1024, 4096));
-  if (!content) {
+  if (!content || (Array.isArray(content) && content.length === 0)) {
     res.writeHead(400,{"Content-Type":"application/json; charset=utf-8"});
     return res.end(JSON.stringify({message:"Missing content."}));
   }
