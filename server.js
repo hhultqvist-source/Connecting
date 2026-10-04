@@ -97,16 +97,16 @@ http.createServer((req,res)=>{
       fs.readFile(path.join(root,"index.html"),(e,fallback)=>{
         if(e){res.writeHead(404);return res.end("Not found");}
         res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store"});
-        res.end(Buffer.from(fallback.toString("utf8").replace("</body>","<script src=\"/ui-fix.js\"></script><script src=\"/app-fix.js\"></script></body>"),"utf8"));
+        res.end(Buffer.from(fallback.toString("utf8").replace("</body>","<script src=\"/ui-fix.js?v=20261005b\"></script><script src=\"/app-fix.js?v=20261005b\"></script></body>"),"utf8"));
       });
       return;
     }
     res.writeHead(200,{
       "Content-Type":types[path.extname(file)] || "application/octet-stream",
-      "Cache-Control": pathname.endsWith(".html") ? "no-store" : "public, max-age=3600",
+      "Cache-Control": (pathname.endsWith(".html") || pathname.endsWith(".js")) ? "no-store" : "public, max-age=3600",
       "X-Content-Type-Options":"nosniff",
       "Referrer-Policy":"same-origin"
     });
-    res.end(pathname.endsWith(".html") ? Buffer.from(data.toString("utf8").replace("</body>","<script src=\"/ui-fix.js\"></script><script src=\"/app-fix.js\"></script></body>"),"utf8") : data);
+    res.end(pathname.endsWith(".html") ? Buffer.from(data.toString("utf8").replace("</body>","<script src=\"/ui-fix.js?v=20261005b\"></script><script src=\"/app-fix.js?v=20261005b\"></script></body>"),"utf8") : data);
   });
 }).listen(port,()=>console.log("Connecting live on port "+port));
