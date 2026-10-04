@@ -281,14 +281,15 @@ body.keyboard-open .chat{scroll-behavior:auto}
 /* ===== Connecting v4: mobile-first identity + two-mode layout ===== */
 :root{--nav-h:66px}
 body{min-height:100dvh}
-header.connect-header{padding:10px 14px 8px;border-bottom:1px solid var(--line);background:rgba(15,20,51,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);z-index:10}
-.connect-top{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px}
-.connect-mark{text-align:center;line-height:1}
-.connect-emoji{font-size:21px;letter-spacing:1px;white-space:nowrap}
-.connect-word{font-family:var(--serif);font-size:20px;font-weight:400;letter-spacing:.08em;margin-top:4px;color:var(--ink)}
-.connect-person{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:rgba(255,255,255,.035);font-size:18px}
-.connect-contact{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:8px;font-size:12.5px;color:var(--mute)}
-.connect-contact .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}
+header.connect-header{padding:6px 14px;border-bottom:1px solid var(--line);background:rgba(15,20,51,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);z-index:10}
+.connect-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:44px;width:100%;gap:12px}
+#onlineInline{grid-column:1;display:flex;align-items:center;justify-self:start;gap:7px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+#onlineInline .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}
+.connect-mark{grid-column:2;justify-self:center;text-align:center;line-height:1}
+.connect-emoji{font-size:18px;letter-spacing:1px;white-space:nowrap}
+#settingsBtn{grid-column:3;justify-self:end;margin:0}
+.connect-person{display:none!important}
+.connect-contact{display:none!important}
 .connect-contact b{color:var(--ink);font-weight:600}
 header .pair, header .statusbar{display:none!important}
 
@@ -355,16 +356,16 @@ body.chat-only .chat{padding-bottom:8px}
 
 <header class="connect-header">
   <div class="connect-top">
-    <button class="connect-person" id="profileBtn" aria-label="Profile">◉</button>
+    <div id="onlineInline" aria-label="Presence status"><span class="live" id="contactDot"></span><span id="contactStatus">Online</span></div>
     <div class="connect-mark" aria-label="Connecting">
       <div class="connect-emoji">🌎 🔁 🌎</div>
-      <div class="connect-word">Connecting</div>
     </div>
     <button class="iconbtn" id="settingsBtn" aria-label="Settings">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </div>
-  <div class="connect-contact"><b id="contactLabel">Contact</b><span class="live" id="contactDot"></span><span id="contactStatus">Online</span></div>
+  <div class="connect-contact" hidden><b id="contactLabel">Contact</b></div>
+  <button class="connect-person" id="profileBtn" aria-label="Profile" hidden>◉</button>
   <div class="pair" aria-hidden="true" hidden>
     <div class="lang left"><span class="name" id="myName">Swedish</span><select id="myLang" aria-label="My language"></select></div>
     <button class="swap" id="swapBtn" aria-label="Swap languages"></button>
