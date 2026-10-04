@@ -412,7 +412,7 @@ body.chat-only .chat{padding-bottom:8px}
     </div>
   </div>
   <div class="ai-tray" id="aiTray" hidden>
-    <div class="ai-head"><div><b>✨ Writing assist</b><br><span>Keep my voice, only adjust the tone</span></div><button class="iconbtn" id="aiClose" aria-label="Close AI">×</button></div>
+    <div class="ai-head"><div><b>✨ Writing assist</b><br><span>Tell AI what to write. Your selected tone is always applied.</span></div><button class="iconbtn" id="aiClose" aria-label="Close AI">×</button></div>
     <div class="ai-tones tones" id="tones" role="group" aria-label="Tone"></div>
     <textarea id="aiPrompt" rows="2" placeholder="Ask AI to write anything — e.g. 'Write a thank-you email', 'Reply politely', 'Make this shorter'…"></textarea>
     <div class="ai-actions"><small id="aiHint">AI changes as little as possible.</small><button id="aiApply">Suggest reply</button></div>
@@ -705,6 +705,7 @@ if (CAN_USE_AI) {
       state.tone = state.tone === v ? "" : v;
       document.querySelectorAll(".tone").forEach(t => t.setAttribute("aria-pressed", t.dataset.v === state.tone));
       savePrefs();
+      if (typeof updateAiAction === "function") updateAiAction();
     };
     $("tones")?.appendChild(b);
   });
@@ -1324,18 +1325,18 @@ function recentOwnStyle(){
   return state.history.filter(h => h.side === "me" && h.original).slice(-10).map(h => h.original).join("\n");
 }
 function aiToneInstruction(){
-  if (!state.tone) return "Keep the tone essentially unchanged.";
+  if (!state.tone) return "Selected tone: Natural. Write naturally in the user's own voice.";
   const map={
-    friendly:"Make it only slightly warmer, not more elaborate.",
-    short:"Shorten by roughly 25–40% while keeping the same voice.",
-    professional:"Clean it up lightly, but keep it conversational and human.",
-    formal:"Make it a little more formal without sounding corporate or stiff.",
-    legal:"Make wording clearer and more precise; do not invent legal claims.",
-    romantic:"Add subtle warmth and affection; avoid clichés.",
-    flirty:"Make it subtly playful/flirty; never overdo it.",
-    narrative:"Improve flow slightly without adding facts or flourishes."
+    friendly:"Selected tone: Friendly. The finished text MUST feel warm, friendly and natural without becoming elaborate.",
+    short:"Selected tone: Short. The finished text MUST be concise and direct, roughly 25–40% shorter than a normal version when possible.",
+    professional:"Selected tone: Professional. The finished text MUST be polished, credible and professional while still sounding human.",
+    formal:"Selected tone: Formal. The finished text MUST use a clearly formal, composed style without sounding robotic.",
+    legal:"Selected tone: Legal. The finished text MUST be precise, careful and legally neutral; never invent legal claims.",
+    romantic:"Selected tone: Romantic. The finished text MUST feel warm and affectionate without clichés.",
+    flirty:"Selected tone: Flirty. The finished text MUST feel subtly playful and flirty without overdoing it.",
+    narrative:"Selected tone: Narrative. The finished text MUST have a natural storytelling flow without inventing facts."
   };
-  return map[state.tone] || "Keep the tone essentially unchanged.";
+  return map[state.tone] || "Selected tone: Natural. Write naturally in the user's own voice.";
 }
 async function aiSuggest(focus){
   if (!CAN_USE_AI) return;
@@ -1348,17 +1349,24 @@ async function aiSuggest(focus){
       `${h.side === "me" ? "Me" : "Them"}: ${h.side === "me" ? h.original : h.translated}`).join("\n");
     const style = recentOwnStyle();
 
-    const sys = `You are the user's private writing assistant in ${my}. Follow the user's instruction literally and intelligently. You can write complete text from scratch, not only edit chat messages.
-Examples: if the user says "write a thank-you email", write a complete natural thank-you email. If they say "write a birthday message", write the message. If they say "reply politely", write the reply. If they provide a draft, improve it according to the instruction.
-Use conversation context, current draft, selected tone and the user's natural writing style when relevant, but never let them override a clear explicit instruction. ${aiToneInstruction()}
-Do not explain your reasoning. Output ONLY the finished text the user can send.`;
+    const sys = `You are the user's private writing assistant in ${my}. Follow the user's writing instruction literally and intelligently. You can write complete texts from scratch, not only edit chat messages.
+TASK PRIORITY:
+1. Do exactly the requested writing task (for example: "write a follow-up email" means write the complete follow-up email).
+2. ALWAYS write the finished text in the currently selected tone below.
+3. Use conversation context, draft and the user's natural writing style only when relevant to the task.
+4. Never let old conversation context change the requested task.
+${aiToneInstruction()}
+If the user asks for a type of text without giving all details, make a useful natural version using only safe, generic assumptions; do not invent specific names, dates, prices or facts.
+Do not explain what you did. Output ONLY the finished sendable text.`;
 
-    const user = (customPrompt ? `User instruction:\n${customPrompt}` : "User instruction: write the most natural next message.") +
-      (draft.trim() ? `\n\nCurrent draft, if relevant:\n${draft}` : "") +
-      (focus ? `\n\nMessage to respond to, if relevant:\n${focus.text}` : "") +
-      (ctx ? `\n\nConversation context, if relevant:\n${ctx}` : "") +
-      (style ? `\n\nUser's natural writing examples, for style only:\n${style}` : "") +
-      `\n\nReturn only the finished sendable text.`;
+    const selectedTone = state.tone || "natural";
+    const user = (customPrompt ? `WRITING TASK:\n${customPrompt}` : "WRITING TASK:\nWrite the most natural next message.") +
+      `\n\nSELECTED TONE (mandatory):\n${selectedTone}` +
+      (draft.trim() ? `\n\nCurrent draft, use only if relevant:\n${draft}` : "") +
+      (focus ? `\n\nMessage to respond to, use only if relevant:\n${focus.text}` : "") +
+      (ctx ? `\n\nConversation context, use only if relevant:\n${ctx}` : "") +
+      (style ? `\n\nUser's natural writing examples, style reference only:\n${style}` : "") +
+      `\n\nPerform the WRITING TASK in the mandatory SELECTED TONE. Return only the finished sendable text.`;
 
     const result = await callClaude(sys,user);
     $("input").value=result; autosize(); $("input").focus();
@@ -1370,10 +1378,11 @@ Do not explain your reasoning. Output ONLY the finished text the user can send.`
 function updateAiAction(){
   const hasDraft=!!$("input").value.trim();
   const hasPrompt=!!($("aiPrompt")?.value || "").trim();
+  const toneLabel = state.tone ? (TONES.find(t => t[0] === state.tone)?.[1] || state.tone) : "Natural";
   if($("aiApply")) $("aiApply").textContent=hasPrompt ? "Create" : (hasDraft ? "Improve" : "Suggest");
   if($("aiHint")) $("aiHint").textContent=hasPrompt
-    ? "Describe what you want written. AI handles the wording."
-    : (hasDraft ? "AI uses your draft, context and writing style." : "AI uses the conversation and your writing style.");
+    ? `Write the task in ${toneLabel} tone.`
+    : (hasDraft ? `Improve in ${toneLabel} tone using your draft and context.` : `Suggest in ${toneLabel} tone using the conversation.`);
 }
 function setAiTray(open){
   if (!CAN_USE_AI || !$("aiTray") || !$("aiBtn")) return;
