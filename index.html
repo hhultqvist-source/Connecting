@@ -301,7 +301,7 @@ header .pair, header .statusbar{display:none!important}
 #chatView .chat{flex:1;padding-bottom:12px}
 #chatView .composer{position:relative;border-top:1px solid var(--line);padding-bottom:10px}
 #chatView .composer.composer-expanded{position:absolute!important;left:0!important;right:0!important;bottom:0!important;z-index:20!important;padding:8px!important;background:rgba(15,20,51,.98)!important}
-#chatView .composer.composer-expanded .field{display:grid!important;grid-template-columns:42px 42px 1fr 42px 42px!important;grid-template-rows:minmax(0,1fr) 42px!important;gap:6px!important;height:min(350px,42dvh)!important;padding:10px!important;align-items:end!important;border-radius:18px!important}
+#chatView .composer.composer-expanded .field{display:grid!important;grid-template-columns:42px 42px 1fr 42px 42px!important;grid-template-rows:minmax(0,1fr) 42px!important;gap:6px!important;height:var(--composer-expanded-h,min(320px,38dvh))!important;padding:10px!important;align-items:end!important;border-radius:18px!important}
 #chatView .composer.composer-expanded #input{grid-column:1/-1!important;grid-row:1!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;padding:4px 6px!important;margin:0!important;text-align:left!important;align-self:stretch!important;overflow-y:auto!important}
 #chatView .composer.composer-expanded #imgBtn{grid-column:1!important;grid-row:2!important}
 #chatView .composer.composer-expanded #micBtn{grid-column:2!important;grid-row:2!important}
@@ -309,7 +309,7 @@ header .pair, header .statusbar{display:none!important}
 #chatView .composer.composer-expanded #sendBtn{grid-column:5!important;grid-row:2!important}
 body.composer-expanded-active #empty{display:none!important}
 #chatView .composer.composer-expanded{position:absolute;left:0;right:0;bottom:0;z-index:20;padding:8px;background:rgba(15,20,51,.98)}
-#chatView .composer.composer-expanded .field{display:grid;grid-template-columns:42px 42px 1fr 42px 42px;grid-template-rows:minmax(0,1fr) 42px;gap:6px;height:min(350px,42dvh);padding:10px;align-items:end;border-radius:18px}
+#chatView .composer.composer-expanded .field{display:grid;grid-template-columns:42px 42px 1fr 42px 42px;grid-template-rows:minmax(0,1fr) 42px;gap:6px;height:var(--composer-expanded-h,min(320px,38dvh));padding:10px;align-items:end;border-radius:18px}
 #chatView .composer.composer-expanded #input{grid-column:1/-1;grid-row:1;width:100%;height:100%;min-height:0;max-height:none;padding:4px 6px;margin:0;text-align:left;align-self:stretch;overflow-y:auto}
 #chatView .composer.composer-expanded #imgBtn{grid-column:1;grid-row:2}
 #chatView .composer.composer-expanded #micBtn{grid-column:2;grid-row:2}
@@ -1022,30 +1022,39 @@ function autosize(){
   const composer = i.closest(".composer");
   if (!field || !composer) return;
 
-  // Chat is never split-screen. Lines 1–2 stay compact.
-  // At line 3 the composer becomes one continuous overlay writing surface.
+  // Always measure from the compact layout first. Otherwise the fixed expanded
+  // grid stretches an empty textarea and makes it impossible to collapse.
+  field.classList.remove("input-expanded");
+  composer.classList.remove("composer-expanded");
+  document.body.classList.remove("composer-expanded-active");
+  i.style.height = "auto";
+  i.style.minHeight = "";
+  i.style.maxHeight = "";
+  i.style.overflowY = "hidden";
+
   const cs = getComputedStyle(i);
   const line = parseFloat(cs.lineHeight) || 22.4;
   const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
   const oneLine = Math.ceil(line + pad);
   const twoLines = Math.ceil(line * 2 + pad + 2);
-
-  i.style.height = "auto";
-  i.style.minHeight = "";
-  i.style.maxHeight = "";
   const wanted = i.scrollHeight;
-  const expanded = wanted > twoLines + 1;
+  const expanded = i.value.trim().length > 0 && wanted > twoLines + 1;
 
   field.classList.toggle("input-expanded", expanded);
   composer.classList.toggle("composer-expanded", expanded);
   document.body.classList.toggle("composer-expanded-active", expanded);
 
   if (expanded) {
+    // Large writing surface, but sized to the actual text instead of leaving
+    // a large empty block. It still grows and scrolls for long messages.
+    const expandedHeight = Math.min(Math.max(wanted + 66, 150), Math.min(320, innerHeight * .38));
+    field.style.setProperty("--composer-expanded-h", expandedHeight + "px");
     i.style.height = "100%";
     i.style.minHeight = "0";
     i.style.maxHeight = "none";
     i.style.overflowY = "auto";
   } else {
+    field.style.removeProperty("--composer-expanded-h");
     const target = Math.max(oneLine, Math.min(wanted, twoLines));
     i.style.height = target + "px";
     i.style.overflowY = "hidden";
@@ -1090,15 +1099,15 @@ function handleFile(file){
 
 const readDataUrl = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
 
-/* Normalise any image to a JPEG ≤1600px so Claude always accepts it */
+/* Normalise images before sending to Claude: mobile-friendly and safely below request limits */
 async function toJpeg(file){
   const url = URL.createObjectURL(file);
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-  const s = Math.min(1, 1600 / Math.max(img.width, img.height));
+  const s = Math.min(1, 1280 / Math.max(img.width, img.height));
   const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   URL.revokeObjectURL(url);
-  return c.toDataURL("image/jpeg", .86);
+  return c.toDataURL("image/jpeg", .78);
 }
 
 async function sendImage(file){
@@ -1370,7 +1379,10 @@ Do not explain what you did. Output ONLY the finished sendable text.`;
       `\n\nPerform the WRITING TASK in the mandatory SELECTED TONE. Return only the finished sendable text.`;
 
     const result = await callClaude(sys,user);
-    $("input").value=result; autosize(); $("input").focus();
+    $("input").value=result;
+    setAiTray(false);
+    autosize();
+    $("input").focus();
     try{$("input").setSelectionRange(result.length,result.length);}catch{}
     updateAiAction();
   } catch(e){ toast(e.message); }
