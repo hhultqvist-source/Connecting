@@ -82,14 +82,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var presenceStyle = document.createElement("style");
   presenceStyle.textContent =
-    "header.connect-header{padding:6px 14px!important}" +
-    ".connect-top{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;width:100%!important;min-height:44px!important;gap:12px!important}" +
-    "#onlineInline{grid-column:1!important;display:flex!important;align-items:center!important;justify-self:start!important;gap:7px!important;font-size:12.5px!important;color:var(--mute)!important;white-space:nowrap!important;margin:0!important}" +
-    ".connect-mark{grid-column:2!important;justify-self:center!important;text-align:center!important;margin:0!important}" +
-    ".connect-emoji{font-size:18px!important;line-height:1!important}" +
-    ".connect-word{display:none!important}" +
-    "#settingsBtn{grid-column:3!important;justify-self:end!important;margin:0!important}" +
-    ".connect-contact,.connect-person{display:none!important}";
+    ".connect-word,.connect-contact,.connect-person{display:none!important}";
   document.head.appendChild(presenceStyle);
 
   var settings = document.getElementById("settings");
