@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", function () {
     "#onlineInline .live{width:7px!important;height:7px!important;border-radius:50%!important;background:var(--ok)!important;box-shadow:0 0 0 4px rgba(121,230,177,.08)!important}" +
     ".connect-mark{position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;text-align:center!important;margin:0!important;z-index:1}" +
     ".connect-emoji{font-size:16px!important;line-height:1!important}" +
-    ".connect-word{font-size:17px!important;margin-top:1px!important;line-height:1!important}" +
+    ".connect-word{display:none!important}" +
     "#settingsBtn{margin:0!important;z-index:2!important;flex:0 0 40px!important}" +
     ".connect-contact{display:none!important}";
   document.head.appendChild(presenceStyle);
