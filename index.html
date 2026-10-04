@@ -130,7 +130,7 @@ header{padding:14px 18px 12px;border-bottom:1px solid var(--line);position:relat
 .field{display:flex;align-items:flex-end;gap:6px;background:var(--deep);border:1px solid var(--line);border-radius:22px;padding:5px}
 .field:focus-within{border-color:rgba(127,214,194,.45)}
 .field .iconbtn{width:40px;height:40px;border-radius:50%;flex-shrink:0}
-#input{flex:1;background:none;border:0;outline:none;resize:none;overflow-y:hidden;font-size:16px;line-height:1.4;padding:9px 4px;max-height:140px;color:var(--ink)}
+#input{flex:1;min-width:0;background:none;border:0;outline:none;resize:none;overflow-y:hidden;font-size:16px;line-height:1.4;padding:9px 4px;max-height:140px;color:var(--ink)}
 .composer{position:relative}
 .sheet{position:absolute;left:12px;bottom:calc(100% - 4px);min-width:250px;background:var(--raise);border:1px solid var(--line);border-radius:18px;padding:6px;box-shadow:0 18px 40px rgba(5,8,25,.45);animation:in .18s ease-out;z-index:5}
 .sheet[hidden]{display:none}
@@ -1037,8 +1037,13 @@ function autosize(){
   const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
   const oneLine = Math.ceil(line + pad);
   const twoLines = Math.ceil(line * 2 + pad + 2);
+
+  // iOS Safari can report scrollHeight as if the textarea had already grown,
+  // which made a visibly wrapped third line stay in compact mode. Measure
+  // against an actual two-line box instead: overflow beyond it means line 3.
+  i.style.height = twoLines + "px";
   const wanted = i.scrollHeight;
-  const expanded = i.value.trim().length > 0 && wanted > twoLines + 1;
+  const expanded = i.value.trim().length > 0 && wanted > i.clientHeight + 1;
 
   field.classList.toggle("input-expanded", expanded);
   composer.classList.toggle("composer-expanded", expanded);
@@ -1060,7 +1065,11 @@ function autosize(){
     i.style.overflowY = "hidden";
   }
 }
-$("input").addEventListener("input", autosize, { passive:true });
+$("input").addEventListener("input", () => {
+  autosize();
+  // Re-check after WebKit has committed the latest wrap/layout.
+  requestAnimationFrame(autosize);
+}, { passive:true });
 $("input").addEventListener("focus", () => {
   document.body.classList.add("keyboard-open");
   requestAnimationFrame(() => { autosize(); chat.scrollTop = chat.scrollHeight; });
