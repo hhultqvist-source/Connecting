@@ -300,7 +300,10 @@ header .pair, header .statusbar{display:none!important}
 .msg .orig{display:none!important}
 .msg.show-original .orig{display:block!important}
 
-.bottomnav{height:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));padding:6px 18px max(6px,env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid var(--line);background:rgba(11,15,39,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:12}
+.bottomnav{height:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));padding:6px 18px max(6px,env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;border-top:1px solid var(--line);background:rgba(11,15,39,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:12}
+.bottom-translate-action{height:42px;min-width:96px;padding:0 18px;border-radius:999px;background:var(--amber);color:var(--amber-ink);font-size:13px;font-weight:800;box-shadow:0 6px 18px rgba(255,181,71,.18);white-space:nowrap}
+.bottom-translate-action:disabled{opacity:.45}
+#chatView.active~.bottomnav .bottom-translate-action{opacity:.35;pointer-events:none}
 .navbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mute);font-size:11.5px;font-weight:600;border-radius:14px}
 .navbtn svg{width:22px;height:22px}.navbtn.active{color:var(--fjord);background:rgba(127,214,194,.06)}
 
@@ -309,7 +312,7 @@ header .pair, header .statusbar{display:none!important}
 .langpick{height:46px;border:1px solid var(--line);border-radius:15px;background:var(--deep);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 10px;position:relative;min-width:0}
 .langpick .flag{font-size:22px;line-height:1}.langpick .lname{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.langpick select{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
 .trans-swap{width:46px;height:46px;border-radius:15px;border:1px solid var(--line);display:grid;place-items:center;background:rgba(255,255,255,.035);color:var(--fjord);font-size:22px}
-.splittranslate{flex:1;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) 42px minmax(0,1fr);gap:8px}
+.splittranslate{flex:1;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) 0 minmax(0,1fr);gap:8px}
 .transpane{position:relative;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,rgba(24,32,82,.92),rgba(16,22,58,.92));overflow:hidden;min-height:0}
 .transpane textarea,.transresult{width:100%;height:100%;padding:18px 16px 52px;background:transparent;border:0;outline:0;color:var(--ink);font-family:var(--sans);font-size:clamp(18px,4.8vw,23px);line-height:1.45;resize:none;overflow:auto;-webkit-overflow-scrolling:touch}
 .transpane textarea::placeholder{color:var(--mute)}
@@ -438,7 +441,7 @@ body.chat-only .chat{padding-bottom:8px}
       <textarea id="trInput" maxlength="12000" rows="1" placeholder="Type or paste text…" autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
       <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
     </div>
-    <div class="transmid"><button id="trGo">Translate</button></div>
+    <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
       <div class="transresult empty" id="trResult">Your translation will appear here.</div>
       <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><button id="trListen">Listen</button><button id="trCopy">Copy</button></div></div>
@@ -448,6 +451,7 @@ body.chat-only .chat{padding-bottom:8px}
 
 <nav class="bottomnav" aria-label="Main navigation">
   <button class="navbtn active" data-view="chatView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg><span>Chat</span></button>
+  <button class="bottom-translate-action" id="trGo" type="button" aria-label="Translate">Translate</button>
   <button class="navbtn" data-view="translateView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h11M11 3l4 4-4 4M20 17H9M13 13l-4 4 4 4"/></svg><span>Translate</span></button>
 </nav>
 
@@ -1138,59 +1142,69 @@ const fmt = s => { s = Math.max(0, Math.round(s || 0)); return `${Math.floor(s/6
 $("micBtn").onclick = () => session ? stopRecording() : startRecording();
 
 async function startRecording(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const useGroq = has(KEYS.groq);
-  if (!useGroq && !SR) { toast("Lägg in en Groq-nyckel under ⚙︎ för röst — webbläsaren saknar egen taligenkänning."); return; }
-
-  let stream = null;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio:true }); }
-  catch { if (useGroq) { toast("Mikrofonen gick inte att starta. Tillåt mikrofonen i webbläsaren."); return; } }
-
-  const s = session = { stream, start:Date.now(), transcript:"", useGroq };
-  if (stream) {
-    const chunks = [];
-    s.rec = new MediaRecorder(stream);
-    s.rec.ondataavailable = e => e.data.size && chunks.push(e.data);
-    s.blob = new Promise(res => s.rec.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      res(new Blob(chunks, { type:s.rec.mimeType || "audio/webm" }));
-    });
-    s.rec.start();
+  if (session) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    toast("Voice recording is not available in this browser.");
+    return;
   }
-  if (!useGroq) {
-    s.recog = new SR(); s.recog.lang = L[langs().from].code; s.recog.interimResults = false; s.recog.continuous = true;
-    s.recog.onresult = e => { s.transcript = [...e.results].map(r => r[0].transcript).join(" ").trim(); };
-    s.srDone = new Promise(res => { s.recog.onend = res; s.recog.onerror = res; });
-    s.srDone.then(() => { if (session === s) stopRecording(); });
-    s.recog.start();
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+  } catch {
+    toast("Microphone could not start. Allow microphone access in the browser.");
+    return;
   }
+
+  const chunks = [];
+  const rec = new MediaRecorder(stream);
+  const s = session = { stream, rec, chunks, start:Date.now() };
+
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.start();
 
   const input = $("input"), mic = $("micBtn");
   s.placeholder = input.placeholder;
-  input.disabled = true; mic.classList.add("rec"); mic.setAttribute("aria-label","Stoppa inspelning");
-  const tick = () => { input.placeholder = `Spelar in  ${fmt((Date.now() - s.start)/1000)}  — tryck igen för att skicka`; };
-  tick(); s.timer = setInterval(tick, 250);
+  input.disabled = true;
+  mic.classList.add("rec");
+  mic.setAttribute("aria-label","Stop recording");
+
+  const tick = () => {
+    input.placeholder = `Recording  ${fmt((Date.now() - s.start)/1000)}  — tap mic again to stop`;
+  };
+  tick();
+  s.timer = setInterval(tick,250);
 }
 
 async function stopRecording(){
-  const s = session; if (!s) return;
+  const s = session;
+  if (!s) return;
   session = null;
+
   clearInterval(s.timer);
   const input = $("input"), mic = $("micBtn");
-  input.disabled = false; input.placeholder = s.placeholder;
-  mic.classList.remove("rec"); mic.setAttribute("aria-label","Spela in röst");
+  input.disabled = false;
+  input.placeholder = s.placeholder;
+  mic.classList.remove("rec");
+  mic.setAttribute("aria-label","Record voice");
 
   const seconds = (Date.now() - s.start) / 1000;
-  if (s.rec && s.rec.state !== "inactive") s.rec.stop();
-  if (s.recog) { try { s.recog.stop(); } catch {} }
-  const blob = s.blob ? await s.blob : null;
-  if (seconds < 0.6) { toast("Håll inspelningen lite längre."); return; }
+  const stopped = new Promise(resolve => {
+    if (s.rec.state === "inactive") return resolve();
+    s.rec.addEventListener("stop", resolve, { once:true });
+  });
 
-  if (s.useGroq) return sendVoiceNote({ blob, seconds });
-  await s.srDone;
-  if (!s.transcript) { toast("Uppfattade inget. Försök igen."); return; }
-  if (!blob) return sendText(s.transcript);
-  sendVoiceNote({ blob, seconds, transcript:s.transcript });
+  if (s.rec.state !== "inactive") s.rec.stop();
+  await stopped;
+  s.stream.getTracks().forEach(t => t.stop());
+
+  const blob = new Blob(s.chunks, { type:s.rec.mimeType || "audio/webm" });
+  if (seconds < 0.6 || !blob.size) {
+    toast("Recording was too short.");
+    return;
+  }
+
+  sendVoiceNote({ blob, seconds });
 }
 
 
