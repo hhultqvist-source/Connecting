@@ -283,8 +283,8 @@ body.keyboard-open .chat{scroll-behavior:auto}
 /* ===== Connecting v4: mobile-first identity + two-mode layout ===== */
 :root{--nav-h:66px}
 body{min-height:100dvh}
-header.connect-header{padding:4px 14px;border-bottom:1px solid var(--line);background:rgba(15,20,51,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);z-index:10}
-.connect-top{position:relative!important;display:block!important;height:46px!important;min-height:46px!important;width:100%!important}
+header.connect-header{padding:2px 14px;border-bottom:1px solid var(--line);background:rgba(15,20,51,.94);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);z-index:10}
+.connect-top{position:relative!important;display:block!important;height:40px!important;min-height:40px!important;width:100%!important}
 #onlineInline{position:absolute!important;left:0!important;top:50%!important;transform:translateY(-50%)!important;display:flex!important;align-items:center!important;gap:7px!important;font-size:12.5px!important;color:var(--mute)!important;white-space:nowrap!important;margin:0!important}
 #onlineInline .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}
 .connect-mark{position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;text-align:center!important;line-height:1!important;margin:0!important}
@@ -300,6 +300,14 @@ header .pair, header .statusbar{display:none!important}
 #chatView{flex:1;min-height:0;flex-direction:column}
 #chatView .chat{flex:1;padding-bottom:12px}
 #chatView .composer{position:relative;border-top:1px solid var(--line);padding-bottom:10px}
+#chatView .composer.composer-expanded{position:absolute;left:0;right:0;bottom:0;z-index:20;padding:8px;background:rgba(15,20,51,.98)}
+#chatView .composer.composer-expanded .field{display:grid;grid-template-columns:42px 42px 1fr 42px 42px;grid-template-rows:minmax(0,1fr) 42px;gap:6px;height:min(350px,42dvh);padding:10px;align-items:end;border-radius:18px}
+#chatView .composer.composer-expanded #input{grid-column:1/-1;grid-row:1;width:100%;height:100%;min-height:0;max-height:none;padding:4px 6px;margin:0;text-align:left;align-self:stretch;overflow-y:auto}
+#chatView .composer.composer-expanded #imgBtn{grid-column:1;grid-row:2}
+#chatView .composer.composer-expanded #micBtn{grid-column:2;grid-row:2}
+#chatView .composer.composer-expanded #aiBtn{grid-column:4;grid-row:2}
+#chatView .composer.composer-expanded #sendBtn{grid-column:5;grid-row:2}
+body.composer-expanded-active #empty{display:none!important}
 .msg .orig{display:none!important}
 .msg.show-original .orig{display:block!important}
 
@@ -998,29 +1006,36 @@ function autosize(){
   const i = $("input");
   if (!i) return;
   const field = i.closest(".field");
-  if (!field) return;
+  const composer = i.closest(".composer");
+  if (!field || !composer) return;
 
-  // Keep lines 1–2 compact. The moment line 3 starts, the composer jumps upward.
-  // Never replace the textarea or rewrite its value, so the caret stays exactly where the user edits.
+  // Chat is never split-screen. Lines 1–2 stay compact; line 3 opens one continuous writing surface.
   const cs = getComputedStyle(i);
   const line = parseFloat(cs.lineHeight) || 22.4;
   const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
   const oneLine = Math.ceil(line + pad);
   const twoLines = Math.ceil(line * 2 + pad + 2);
-  const threeLines = Math.ceil(line * 3 + pad + 2);
-  const maxHeight = Math.max(threeLines, Math.min(156, Math.round(innerHeight * .28)));
 
   i.style.height = "auto";
+  i.style.minHeight = "";
+  i.style.maxHeight = "";
   const wanted = i.scrollHeight;
   const expanded = wanted > twoLines + 1;
+
   field.classList.toggle("input-expanded", expanded);
+  composer.classList.toggle("composer-expanded", expanded);
+  document.body.classList.toggle("composer-expanded-active", expanded);
 
-  const target = expanded
-    ? Math.max(threeLines, Math.min(wanted, maxHeight))
-    : Math.max(oneLine, Math.min(wanted, twoLines));
-
-  i.style.height = target + "px";
-  i.style.overflowY = wanted > maxHeight ? "auto" : "hidden";
+  if (expanded) {
+    i.style.height = "100%";
+    i.style.minHeight = "0";
+    i.style.maxHeight = "none";
+    i.style.overflowY = "auto";
+  } else {
+    const target = Math.max(oneLine, Math.min(wanted, twoLines));
+    i.style.height = target + "px";
+    i.style.overflowY = "hidden";
+  }
 }
 $("input").addEventListener("input", autosize, { passive:true });
 $("input").addEventListener("focus", () => {
