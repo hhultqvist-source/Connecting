@@ -73,66 +73,6 @@ async function handleClaude(req,res){
 }
 
 
-async function handleSeducingResearch(req,res){
-  const key = process.env.CLAUDE_API_KEY;
-  if (!key) {
-    res.writeHead(503,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});
-    return res.end(JSON.stringify({message:"AI service is not configured."}));
-  }
-  try {
-    const upstream = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{
-        "x-api-key":key,
-        "anthropic-version":"2023-06-01",
-        "content-type":"application/json"
-      },
-      body:JSON.stringify({
-        model:process.env.CLAUDE_MODEL || "claude-sonnet-5-5",
-        max_tokens:3000,
-        system:"You are researching style references for a private writing assistant. Search the public web first. Synthesize rather than copy. Avoid manipulative, coercive, degrading, or sexually explicit tactics. Return only original, tasteful examples and concise style lessons.",
-        messages:[{role:"user",content:"Search the web for strong examples and advice for confident, playful, seductive texting between consenting adults. Focus on natural lines that build attraction through curiosity, teasing, warmth, mystery and specific observations. Then produce 24 ORIGINAL short example lines inspired by the patterns you found, grouped mentally across opening, teasing, curiosity, compliment, tension and follow-up. Do not copy source wording. Keep each line usable in a real chat and avoid cheesy pickup lines. End with 6 short style rules."}],
-        tools:[{type:"web_search_20250305",name:"web_search",max_uses:5}]
-      })
-    });
-    const data=await upstream.json().catch(()=>({}));
-    if(!upstream.ok){
-      res.writeHead(upstream.status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});
-      return res.end(JSON.stringify({message:data?.error?.message || "Research request failed."}));
-    }
-    const text=Array.isArray(data.content)?data.content.filter(x=>x&&x.type==="text").map(x=>x.text||"").join("\n").trim():"";
-    res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});
-    return res.end(JSON.stringify({text}));
-  } catch(e){
-    res.writeHead(502,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});
-    return res.end(JSON.stringify({message:"Research service could not be reached."}));
-  }
-}
-
-
-async function runSeducingResearchOnce(){
-  const key=process.env.CLAUDE_API_KEY;
-  if(!key) return console.log("SEDUCING_RESEARCH_ERROR:no key");
-  try{
-    const upstream=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{"x-api-key":key,"anthropic-version":"2023-06-01","content-type":"application/json"},
-      body:JSON.stringify({
-        model:process.env.CLAUDE_MODEL || "claude-sonnet-5-5",
-        max_tokens:3000,
-        system:"You are researching style references for a private writing assistant. Search the public web first. Synthesize rather than copy. Avoid manipulative, coercive, degrading, or sexually explicit tactics. Return only original, tasteful examples and concise style lessons.",
-        messages:[{role:"user",content:"Search the web for strong examples and advice for confident, playful, seductive texting between consenting adults. Focus on natural lines that build attraction through curiosity, teasing, warmth, mystery and specific observations. Produce 24 ORIGINAL short example lines inspired by patterns you find, not copied source wording. Avoid cheesy pickup lines. End with 6 short style rules. Output plain text."}],
-        tools:[{type:"web_search_20250305",name:"web_search",max_uses:5}]
-      })
-    });
-    const data=await upstream.json().catch(()=>({}));
-    if(!upstream.ok) return console.log("SEDUCING_RESEARCH_ERROR:"+JSON.stringify(data));
-    const out=Array.isArray(data.content)?data.content.filter(x=>x&&x.type==="text").map(x=>x.text||"").join("\n").trim():"";
-    console.log("SEDUCING_RESEARCH_BEGIN\n"+out+"\nSEDUCING_RESEARCH_END");
-  }catch(e){console.log("SEDUCING_RESEARCH_ERROR:"+e.message)}
-}
-runSeducingResearchOnce();
-
 const types = {
   ".html":"text/html; charset=utf-8",
   ".js":"text/javascript; charset=utf-8",
@@ -149,9 +89,6 @@ http.createServer((req,res)=>{
   let pathname = decodeURIComponent(url.pathname);
   if (pathname === "/api/claude" && req.method === "POST") {
     return handleClaude(req,res);
-  }
-  if (pathname === "/api/research/seducing-7f4a2d9c" && req.method === "GET") {
-    return handleSeducingResearch(req,res);
   }
   if (pathname === "/" || pathname === "") pathname = "/index.html";
   const file = path.join(root, pathname.replace(/^\/+/, ""));
