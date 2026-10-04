@@ -1329,9 +1329,9 @@ function aiToneInstruction(){
   const map={
     friendly:"Selected tone: Friendly. The finished text MUST feel warm, friendly and natural without becoming elaborate.",
     short:"Selected tone: Short. The finished text MUST be concise and direct, roughly 25–40% shorter than a normal version when possible.",
-    professional:"Selected tone: Professional. The finished text MUST be polished, credible and professional while still sounding human.",
-    formal:"Selected tone: Formal. The finished text MUST use a clearly formal, composed style without sounding robotic.",
-    legal:"Selected tone: Legal. The finished text MUST be precise, careful and legally neutral; never invent legal claims.",
+    professional:"Selected tone: Professional. The finished text MUST be polished, credible and professional while still sounding human. NEVER use emojis, emoticons or decorative symbols.",
+    formal:"Selected tone: Formal. The finished text MUST use a clearly formal, composed style without sounding robotic. NEVER use emojis, emoticons or decorative symbols.",
+    legal:"Selected tone: Legal. The finished text MUST be precise, careful and legally neutral; never invent legal claims. NEVER use emojis, emoticons or decorative symbols.",
     romantic:"Selected tone: Romantic. The finished text MUST feel warm and affectionate without clichés.",
     flirty:"Selected tone: Flirty. The finished text MUST feel subtly playful and flirty without overdoing it.",
     narrative:"Selected tone: Narrative. The finished text MUST have a natural storytelling flow without inventing facts."
@@ -1356,6 +1356,7 @@ TASK PRIORITY:
 3. Use conversation context, draft and the user's natural writing style only when relevant to the task.
 4. Never let old conversation context change the requested task.
 ${aiToneInstruction()}
+5. HARD RULE: when selected tone is formal, professional, or legal, the output must contain ZERO emojis, emoticons, reaction symbols, or decorative emoji-like characters, even if the draft, conversation, or style examples contain them.
 If the user asks for a type of text without giving all details, make a useful natural version using only safe, generic assumptions; do not invent specific names, dates, prices or facts.
 Do not explain what you did. Output ONLY the finished sendable text.`;
 
