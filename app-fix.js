@@ -82,11 +82,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var presenceStyle = document.createElement("style");
   presenceStyle.textContent =
-    ".connect-top{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;width:100%!important;gap:12px!important}" +
-    "#onlineInline{grid-column:1;display:flex;align-items:center;gap:7px;justify-self:start;font-size:12.5px;color:var(--mute);white-space:nowrap}" +
+    "header.connect-header{padding:8px 14px 8px!important}" +
+    ".connect-top{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;width:100%!important;gap:12px!important;min-height:44px!important}" +
+    "#onlineInline{grid-column:1;grid-row:1;display:flex;align-items:center;gap:7px;justify-self:start;font-size:12.5px;color:var(--mute);white-space:nowrap;margin:0!important}" +
     "#onlineInline .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}" +
-    ".connect-mark{grid-column:2;justify-self:center!important;text-align:center!important}" +
-    "#settingsBtn{grid-column:3;justify-self:end!important;margin:0!important}";
+    ".connect-mark{grid-column:2;grid-row:1;justify-self:center!important;align-self:center!important;text-align:center!important;margin:0!important}" +
+    ".connect-emoji{font-size:18px!important;line-height:1!important}" +
+    ".connect-word{font-size:18px!important;margin-top:2px!important;line-height:1.05!important}" +
+    "#settingsBtn{grid-column:3;grid-row:1;justify-self:end!important;align-self:center!important;margin:0!important}" +
+    ".connect-contact{display:none!important}";
   document.head.appendChild(presenceStyle);
 
   var settings = document.getElementById("settings");
