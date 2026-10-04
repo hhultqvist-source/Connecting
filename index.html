@@ -642,7 +642,7 @@ const t = (key, vars={}) => {
 const TONES = [
   ["formal","Formal","formal"],["friendly","Friendly","warm and friendly"],["short","Short","very short and concise"],
   ["professional","Professional","professional"],["legal","Legal","formal legal"],
-  ["romantic","Romantic","romantic"],["flirty","Flirty","flirty and seductive"],["narrative","Narrative","narrative and storytelling"]
+  ["romantic","Romantic","romantic"],["flirty","Flirty","flirty and playful"],["seducing","Seducing","confident, teasing and seductive"],["narrative","Narrative","narrative and storytelling"]
 ];
 
 const state = { speaker:"me", tone:"", history:[], drafts:{ me:"" }, viewerRole:ROLE.id };
@@ -1343,6 +1343,28 @@ function aiToneInstruction(){
     legal:"Selected tone: Legal. The finished text MUST be precise, careful and legally neutral; never invent legal claims. NEVER use emojis, emoticons or decorative symbols.",
     romantic:"Selected tone: Romantic. The finished text MUST feel warm and affectionate without clichés.",
     flirty:"Selected tone: Flirty. The finished text MUST feel subtly playful and flirty without overdoing it.",
+    seducing:`Selected tone: Seducing. Write with calm confidence, restrained attraction, playful tension and genuine curiosity. It should feel personal and spontaneous, never needy, crude, pushy, manipulative or like a pickup-line generator. Prefer short, natural lines that notice the other person's presence or effect on the user, create a little mystery, or invite them to open up. Use the following lines only as STYLE REFERENCES and inspiration; adapt them to the actual conversation instead of copying mechanically:
+- "Top of the morning to you!"
+- "You seem like someone who leaves an impression without trying."
+- "There's a calm confidence about you that I like."
+- "Come here. I'm not done talking to you yet."
+- "You have no idea what that smile does to me."
+- "I've been thinking about you all day. It's getting distracting."
+- "Tell me something you'd never say out loud."
+- "Careful. I'm trying to behave, and you're making it hard."
+- "I'd rather have ten minutes with you than a whole night with anyone else."
+- "You're trouble. And I'm starting to like it."
+- "What's something you want that you haven't told anyone?"
+- "Don't get too comfortable. I like keeping you guessing."
+- "There's one thing I like about you..."
+- "There's a hint of danger in you."
+- "What kind of trouble have you been causing?"
+- "Are you this cute with everyone or are you just trying to win me over?"
+- "I've got a question, but I'm not sure if you're ready for it."
+- "I have a feeling you're hiding a spontaneous side."
+- "You don't realize how attractive you are when you're just being yourself."
+- "Talking to you is becoming my favorite part of the day."
+Keep it tasteful and context-aware. Emojis are optional and should be sparse, never automatic.`,
     narrative:"Selected tone: Narrative. The finished text MUST have a natural storytelling flow without inventing facts."
   };
   return map[state.tone] || "Selected tone: Natural. Write naturally in the user's own voice.";
