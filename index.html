@@ -414,7 +414,7 @@ body.chat-only .chat{padding-bottom:8px}
   <div class="ai-tray" id="aiTray" hidden>
     <div class="ai-head"><div><b>✨ Writing assist</b><br><span>Keep my voice, only adjust the tone</span></div><button class="iconbtn" id="aiClose" aria-label="Close AI">×</button></div>
     <div class="ai-tones tones" id="tones" role="group" aria-label="Tone"></div>
-    <textarea id="aiPrompt" rows="2" placeholder="Tell AI what you want…"></textarea>
+    <textarea id="aiPrompt" rows="2" placeholder="Ask AI to write anything — e.g. 'Write a thank-you email', 'Reply politely', 'Make this shorter'…"></textarea>
     <div class="ai-actions"><small id="aiHint">AI changes as little as possible.</small><button id="aiApply">Suggest reply</button></div>
   </div>
   <div class="sheet" id="sheet" hidden role="menu">
@@ -1347,24 +1347,20 @@ async function aiSuggest(focus){
     const ctx = state.history.filter(h => !h.hiddenFor?.has("me")).slice(-10).map(h =>
       `${h.side === "me" ? "Me" : "Them"}: ${h.side === "me" ? h.original : h.translated}`).join("\n");
     const style = recentOwnStyle();
-    let sys, user;
-    if (draft.trim()) {
-      sys = `You are a very light-touch mobile chat editor. The user writes in ${my}.\n`+
-        `Preserve the user's voice. Keep their vocabulary, sentence length, punctuation habits, abbreviations, emojis, imperfections and conversational rhythm whenever possible. ${aiToneInstruction()}\n`+
-        `Do not add new ideas, explanations, greetings, conclusions, em dashes, polished AI phrasing or unnecessary politeness. Change as little as possible. Output ONLY the edited message.`;
-      user = `Draft:\n${draft}` +
-        (customPrompt ? `\n\nUser instruction:\n${customPrompt}` : "") +
-        (style ? `\n\nExamples of how this user naturally writes (style reference only):\n${style}` : "");
-    } else {
-      sys = `Help the user write one natural mobile-chat reply in ${my}. ${aiToneInstruction()}\n`+
-        `Match the user's real writing style from the examples. Prefer a short, ordinary human reply over a complete or polished answer. Avoid assistant-like phrasing, summaries, generic empathy, em dashes and unnecessary explanation. Output ONLY the reply.`;
-      user = (ctx ? `Conversation:\n${ctx}` : "There is no conversation yet.") +
-        (focus ? `\n\nReply specifically to:\n${focus.text}` : "") +
-        (customPrompt ? `\n\nUser instruction:\n${customPrompt}` : "") +
-        (style ? `\n\nUser's natural writing examples:\n${style}` : "");
-    }
+
+    const sys = `You are the user's private writing assistant in ${my}. Follow the user's instruction literally and intelligently. You can write complete text from scratch, not only edit chat messages.
+Examples: if the user says "write a thank-you email", write a complete natural thank-you email. If they say "write a birthday message", write the message. If they say "reply politely", write the reply. If they provide a draft, improve it according to the instruction.
+Use conversation context, current draft, selected tone and the user's natural writing style when relevant, but never let them override a clear explicit instruction. ${aiToneInstruction()}
+Do not explain your reasoning. Output ONLY the finished text the user can send.`;
+
+    const user = (customPrompt ? `User instruction:\n${customPrompt}` : "User instruction: write the most natural next message.") +
+      (draft.trim() ? `\n\nCurrent draft, if relevant:\n${draft}` : "") +
+      (focus ? `\n\nMessage to respond to, if relevant:\n${focus.text}` : "") +
+      (ctx ? `\n\nConversation context, if relevant:\n${ctx}` : "") +
+      (style ? `\n\nUser's natural writing examples, for style only:\n${style}` : "") +
+      `\n\nReturn only the finished sendable text.`;
+
     const result = await callClaude(sys,user);
-    // Preserve cursor semantics: only replace after explicit AI action, then put cursor at end.
     $("input").value=result; autosize(); $("input").focus();
     try{$("input").setSelectionRange(result.length,result.length);}catch{}
     updateAiAction();
@@ -1373,8 +1369,11 @@ async function aiSuggest(focus){
 }
 function updateAiAction(){
   const hasDraft=!!$("input").value.trim();
-  if($("aiApply")) $("aiApply").textContent=hasDraft ? "Refine my text" : "Suggest reply";
-  if($("aiHint")) $("aiHint").textContent=hasDraft ? "Small edits. Your rhythm and wording come first." : "Short reply in your own writing style.";
+  const hasPrompt=!!($("aiPrompt")?.value || "").trim();
+  if($("aiApply")) $("aiApply").textContent=hasPrompt ? "Create" : (hasDraft ? "Improve" : "Suggest");
+  if($("aiHint")) $("aiHint").textContent=hasPrompt
+    ? "Describe what you want written. AI handles the wording."
+    : (hasDraft ? "AI uses your draft, context and writing style." : "AI uses the conversation and your writing style.");
 }
 function setAiTray(open){
   if (!CAN_USE_AI || !$("aiTray") || !$("aiBtn")) return;
@@ -1397,6 +1396,7 @@ if (CAN_USE_AI) {
   $("aiClose").onclick = () => setAiTray(false);
   $("aiApply").onclick = () => aiSuggest();
   $("input").addEventListener("input", updateAiAction);
+  $("aiPrompt")?.addEventListener("input", updateAiAction);
 }
 
 function replyWithAi(div){
