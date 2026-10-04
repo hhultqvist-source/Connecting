@@ -59,12 +59,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     field.classList.toggle("input-expanded", expanded);
     if (composer) composer.classList.toggle("composer-expanded", expanded);
+    document.body.classList.toggle("composer-expanded-active", expanded);
 
     if (expanded) {
-      var large = Math.max(three, Math.min(330, Math.round(window.innerHeight * 0.38)));
-      input.style.height = large + "px";
-      input.style.minHeight = large + "px";
-      input.style.maxHeight = large + "px";
+      input.style.height = "100%";
+      input.style.minHeight = "0";
+      input.style.maxHeight = "none";
       input.style.overflowY = "auto";
     } else {
       input.style.minHeight = "";
@@ -91,8 +91,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var style = document.createElement("style");
   style.textContent =
-    ".composer.composer-expanded{padding-top:8px}" +
-    ".composer.composer-expanded .field{align-items:flex-end;padding-left:8px!important}" +
-    ".composer.composer-expanded #input{min-height:min(330px,38dvh)!important;max-height:min(330px,38dvh)!important;padding-left:0!important;margin-left:0!important;text-align:left!important}";
+    "#chatView{position:relative!important}" +
+    ".composer.composer-expanded{position:absolute!important;left:0!important;right:0!important;bottom:0!important;z-index:20!important;padding:8px!important;background:rgba(15,20,51,.97)!important}" +
+    ".composer.composer-expanded .field{display:grid!important;grid-template-columns:44px 44px 1fr 44px 44px!important;grid-template-rows:minmax(0,1fr) 44px!important;gap:6px!important;height:min(390px,48dvh)!important;padding:10px!important;align-items:end!important;border-radius:18px!important}" +
+    ".composer.composer-expanded #input{grid-column:1/-1!important;grid-row:1!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;padding:4px 6px!important;margin:0!important;text-align:left!important;align-self:stretch!important;overflow-y:auto!important}" +
+    ".composer.composer-expanded #imgBtn{grid-column:1!important;grid-row:2!important}" +
+    ".composer.composer-expanded #micBtn{grid-column:2!important;grid-row:2!important}" +
+    ".composer.composer-expanded #aiBtn{grid-column:4!important;grid-row:2!important}" +
+    ".composer.composer-expanded #sendBtn{grid-column:5!important;grid-row:2!important}" +
+    ".composer-expanded-active #empty{display:none!important}";
   document.head.appendChild(style);
 });
