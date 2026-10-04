@@ -82,14 +82,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var presenceStyle = document.createElement("style");
   presenceStyle.textContent =
-    "header.connect-header{padding:8px 14px 8px!important}" +
-    ".connect-top{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;width:100%!important;gap:12px!important;min-height:44px!important}" +
-    "#onlineInline{grid-column:1;grid-row:1;display:flex;align-items:center;gap:7px;justify-self:start;font-size:12.5px;color:var(--mute);white-space:nowrap;margin:0!important}" +
-    "#onlineInline .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(121,230,177,.08)}" +
-    ".connect-mark{grid-column:2;grid-row:1;justify-self:center!important;align-self:center!important;text-align:center!important;margin:0!important}" +
-    ".connect-emoji{font-size:18px!important;line-height:1!important}" +
-    ".connect-word{font-size:18px!important;margin-top:2px!important;line-height:1.05!important}" +
-    "#settingsBtn{grid-column:3;grid-row:1;justify-self:end!important;align-self:center!important;margin:0!important}" +
+    "header.connect-header{padding:6px 14px!important}" +
+    ".connect-top{position:relative!important;display:flex!important;align-items:center!important;justify-content:space-between!important;width:100%!important;min-height:42px!important;gap:0!important}" +
+    "#onlineInline{display:flex!important;align-items:center!important;gap:7px!important;font-size:12.5px!important;color:var(--mute)!important;white-space:nowrap!important;margin:0!important;z-index:2}" +
+    "#onlineInline .live{width:7px!important;height:7px!important;border-radius:50%!important;background:var(--ok)!important;box-shadow:0 0 0 4px rgba(121,230,177,.08)!important}" +
+    ".connect-mark{position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;text-align:center!important;margin:0!important;z-index:1}" +
+    ".connect-emoji{font-size:16px!important;line-height:1!important}" +
+    ".connect-word{font-size:17px!important;margin-top:1px!important;line-height:1!important}" +
+    "#settingsBtn{margin:0!important;z-index:2!important;flex:0 0 40px!important}" +
     ".connect-contact{display:none!important}";
   document.head.appendChild(presenceStyle);
 
