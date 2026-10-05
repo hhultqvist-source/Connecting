@@ -73,6 +73,28 @@ async function handleClaude(req,res){
 }
 
 
+
+async function handleTTS(req,res){
+  const key=process.env.ELEVENLABS_API_KEY;
+  if(!key){ res.writeHead(503,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice service is not configured."})); }
+  let raw="";
+  for await(const chunk of req){ raw+=chunk; if(raw.length>256000){ res.writeHead(413,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Text is too long."})); } }
+  let body; try{ body=JSON.parse(raw||"{}"); }catch{ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Invalid JSON."})); }
+  const text=String(body.text||"").trim().slice(0,12000);
+  if(!text){ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Missing text."})); }
+  // ElevenLabs' multilingual model speaks the supplied target-language text directly.
+  const voiceId=process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
+  try{
+    const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
+      method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
+      body:JSON.stringify({text,model_id:"eleven_multilingual_v2"})
+    });
+    if(!upstream.ok){ const err=await upstream.text().catch(()=>""); res.writeHead(upstream.status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice generation failed.",detail:err.slice(0,300)})); }
+    const audio=Buffer.from(await upstream.arrayBuffer());
+    res.writeHead(200,{"Content-Type":"audio/mpeg","Content-Length":audio.length,"Cache-Control":"no-store"}); return res.end(audio);
+  }catch(err){ res.writeHead(502,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice service could not be reached."})); }
+}
+
 const types = {
   ".html":"text/html; charset=utf-8",
   ".js":"text/javascript; charset=utf-8",
@@ -89,6 +111,9 @@ http.createServer((req,res)=>{
   let pathname = decodeURIComponent(url.pathname);
   if (pathname === "/api/claude" && req.method === "POST") {
     return handleClaude(req,res);
+  }
+  if (pathname === "/api/tts" && req.method === "POST") {
+    return handleTTS(req,res);
   }
   if (pathname === "/" || pathname === "") pathname = "/index.html";
   const file = path.join(root, pathname.replace(/^\/+/, ""));
