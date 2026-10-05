@@ -80,14 +80,14 @@ async function handleTTS(req,res){
   let raw="";
   for await(const chunk of req){ raw+=chunk; if(raw.length>256000){ res.writeHead(413,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Text is too long."})); } }
   let body; try{ body=JSON.parse(raw||"{}"); }catch{ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Invalid JSON."})); }
-  const text=String(body.text||"").trim().slice(0,12000);
+  const text=String(body.text||"").trim().slice(0,12000);\n  const language=String(body.language||"");
   if(!text){ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Missing text."})); }
   // ElevenLabs' multilingual model speaks the supplied target-language text directly.
   const voiceId=process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
   try{
     const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
-      body:JSON.stringify({text,model_id:"eleven_multilingual_v2"})
+      body:JSON.stringify(language==="Norwegian" ? {text,model_id:"eleven_flash_v2_5",language_code:"no"} : {text,model_id:"eleven_multilingual_v2"})
     });
     if(!upstream.ok){ const err=await upstream.text().catch(()=>""); res.writeHead(upstream.status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice generation failed.",detail:err.slice(0,300)})); }
     const audio=Buffer.from(await upstream.arrayBuffer());
