@@ -1777,32 +1777,43 @@ async function sendVoice(blob, kind = "audio", seconds){
   } catch(e){ b.fail("Kunde inte tolka talet: " + e.message); }
 }
 
-/* ---------- Voice out: ElevenLabs, else browser ---------- */
+/* ---------- Voice out: target-language voice + Listen/Stop ---------- */
 let current = null;
-async function speak(text, lang, btn){
-  if (current) { current.stop(); }
-  btn.classList.add("playing");
-  const end = () => btn.classList.remove("playing");
-  try {
-    if (has(KEYS.eleven)) {
-      const res = await fetchTimeout(`https://api.elevenlabs.io/v1/text-to-speech/${KEYS.voice}`, {
-        method:"POST",
-        headers:{ "xi-api-key":KEYS.eleven, "content-type":"application/json" },
-        body:JSON.stringify({ text, model_id:"eleven_multilingual_v2" })
-      }, 30000);
-      if (!res.ok) throw new Error("ElevenLabs svarade " + res.status);
-      const a = new Audio(URL.createObjectURL(await res.blob()));
-      a.onended = end; current = { stop(){ a.pause(); end(); } }; await a.play();
-    } else {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = L[lang].code; u.onend = end; u.onerror = end;
-      speechSynthesis.cancel(); speechSynthesis.speak(u);
-      current = { stop(){ speechSynthesis.cancel(); end(); } };
-    }
-  } catch(e){ end(); toast(e.message); }
+function browserVoiceFor(lang){
+  const code=L[lang]?.code || "en-US";
+  const voices=speechSynthesis.getVoices?.() || [];
+  const exact=voices.find(v=>v.lang.toLowerCase()===code.toLowerCase());
+  const base=code.split("-")[0].toLowerCase();
+  return exact || voices.find(v=>v.lang.toLowerCase().startsWith(base+"-")) || null;
 }
-
-
+async function speak(text, lang, btn){
+  if(current){
+    const wasSame=current.btn===btn;
+    current.stop();
+    current=null;
+    if(wasSame) return;
+  }
+  const original=btn.textContent;
+  btn.classList.add("playing");
+  btn.textContent="Stop";
+  const end=()=>{
+    btn.classList.remove("playing");
+    btn.textContent=original || "Listen";
+    if(current?.btn===btn) current=null;
+  };
+  try{
+    // Browser speech is used here deliberately: iOS selects a native voice that
+    // matches the selected target language (fr-FR, ru-RU, it-IT, etc.).
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=L[lang]?.code || "en-US";
+    const voice=browserVoiceFor(lang);
+    if(voice) u.voice=voice;
+    u.onend=end; u.onerror=end;
+    speechSynthesis.cancel();
+    current={btn,stop(){ speechSynthesis.cancel(); end(); }};
+    speechSynthesis.speak(u);
+  }catch(e){ end(); toast(e.message); }
+}
 
 /* ---------- Connecting v7 role UI + localization ---------- */
 function setText(selector, value){
