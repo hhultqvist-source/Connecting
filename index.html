@@ -508,7 +508,7 @@ body.chat-only .chat{padding-bottom:8px}
   <div class="splittranslate">
     <div class="transpane source">
       <textarea id="trInput" maxlength="12000" rows="1" placeholder="Type or paste text…" autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
+      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trDictate" type="button" aria-label="Dictate with iPhone">🎙️ Dictate</button><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
     </div>
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
@@ -1991,6 +1991,12 @@ $("trGo").onclick=async()=>{
   }
   catch(e){ $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); toast("Could not translate: "+e.message); }
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
+};
+$("trDictate").onclick=()=>{
+  const input=$("trInput");
+  input.focus({preventScroll:false});
+  try{ input.setSelectionRange(input.value.length,input.value.length); }catch{}
+  toast("Tap the microphone on the iPhone keyboard and dictate. Review the text, then press Translate.");
 };
 $("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").textContent); toast("Translation copied."); }catch{ toast("Could not copy."); } };
 $("trListen").onclick=()=>{
