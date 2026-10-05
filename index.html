@@ -452,11 +452,11 @@ body.chat-only .chat{padding-bottom:8px}
   <div class="ai-tray" id="aiTray" hidden>
     <div class="ai-head"><div><b>✨ Writing assist</b><br><span>Tell AI what to write. Your selected tone is always applied.</span></div><button class="iconbtn" id="aiClose" aria-label="Close AI">×</button></div>
     <div class="ai-tones tones" id="tones" role="group" aria-label="Tone"></div>
-    <textarea id="aiPrompt" rows="2" placeholder="Ask AI to write anything — e.g. 'Write a thank-you email', 'Reply politely', 'Make this shorter'…"></textarea>
+    <textarea id="aiPrompt" rows="2" inputmode="text" enterkeyhint="done" autocorrect="on" autocapitalize="sentences" autocomplete="off" spellcheck="true" data-form-type="other" aria-autocomplete="none" placeholder="Ask AI to write anything — e.g. 'Write a thank-you email', 'Reply politely', 'Make this shorter'…"></textarea>
     <div class="ai-actions"><small id="aiHint">AI changes as little as possible.</small><button id="aiApply">Suggest reply</button></div>
     <div class="ai-review" id="aiReview" hidden>
       <div class="ai-review-head"><b>🇸🇪 Swedish · Original</b><span id="aiTargetLabel"></span></div>
-      <textarea id="aiSwedishDraft" rows="6" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="Swedish review copy"></textarea>
+      <textarea id="aiSwedishDraft" rows="6" inputmode="text" autocorrect="on" autocapitalize="sentences" autocomplete="off" spellcheck="true" data-form-type="other" aria-autocomplete="none" placeholder="Swedish review copy"></textarea>
       <div class="ai-review-actions"><button id="aiUpdateTarget">Update translation</button><button id="aiUseTarget">Use final text</button></div>
       <div class="ai-final" id="aiFinalWrap"><b id="aiFinalLabel">Final</b><div id="aiFinalText"></div></div>
     </div>
