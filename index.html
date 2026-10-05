@@ -372,6 +372,14 @@ body.chat-only .chat{padding-bottom:8px}
 #input{autocorrect:on}
 
 
+
+/* Compact chat media: photos must never dominate the conversation */
+#chatView .msg:has(> img),#chatView .msg:has(> video){max-width:58%!important;padding:6px!important}
+#chatView .msg>img,#chatView .msg>video{display:block!important;width:auto!important;height:auto!important;max-width:180px!important;max-height:220px!important;object-fit:cover!important;border-radius:10px!important}
+@media(max-width:520px){
+  #chatView .msg:has(> img),#chatView .msg:has(> video){max-width:56%!important}
+  #chatView .msg>img,#chatView .msg>video{max-width:min(170px,44vw)!important;max-height:210px!important}
+}
 /* Connecting mobile readability corrections */
 #chatView .chat{gap:9px!important}
 #chatView .msg{max-width:76%!important;padding:9px 12px 8px!important;gap:5px!important;box-shadow:none!important}
