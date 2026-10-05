@@ -609,7 +609,7 @@ const LANGS = [
   ["Swedish","Svenska","sv-SE","svenska"],["English","Engelska","en-US","engelska"],
   ["Norwegian","Norska","nb-NO","norska"],["Danish","Danska","da-DK","danska"],
   ["Finnish","Finska","fi-FI","finska"],["German","Tyska","de-DE","tyska"],
-  ["French","Franska","fr-FR","franska"],["Spanish","Spanska","es-ES","spanska"],["Icelandic","Isländska","is-IS","isländska"],["Portuguese","Portugisiska","pt-PT","portugisiska"],
+  ["French","Franska","fr-FR","franska"],["Spanish","Spanska","es-ES","spanska"],["Icelandic","Isländska","is-IS","isländska"],["Portuguese","Portugisiska","pt-PT","portugisiska"],["Italian","Italienska","it-IT","italienska"],
   ["Russian","Ryska","ru-RU","ryska"],["Ukrainian","Ukrainska","uk-UA","ukrainska"],
   ["Polish","Polska","pl-PL","polska"],["Estonian","Estniska","et-EE","estniska"],
   ["Latvian","Lettiska","lv-LV","lettiska"],["Lithuanian","Litauiska","lt-LT","litauiska"],
@@ -1895,13 +1895,26 @@ $("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $
 $("trPaste").onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ $("trInput").value=t.slice(0,12000); $("trCount").textContent=$("trInput").value.length; $("trInput").focus(); } }catch{ toast("Tillåt åtkomst till urklipp, eller klistra in manuellt."); } };
 async function translatePlain(text,from,to){
   if(from===to) return text;
-  return callClaude(`You are a precise translator. Translate from ${from} to ${to}. Preserve meaning, paragraph breaks, names, numbers and tone. Output ONLY the translation, with no commentary.`, text, 4000);
+  const prompt=`TRANSLATION TASK. Source language: ${from}. Target language: ${to}. You MUST return the text in ${to}, not in ${from}. Preserve meaning, paragraph breaks, names, numbers and tone. Output ONLY the translated text, no commentary.`;
+  let out=(await callClaude(prompt,text,4000)).trim();
+  // A different target language must never silently echo the source.
+  if(out===text.trim()){
+    out=(await callClaude(`Translate this ${from} text strictly into ${to}. The previous attempt incorrectly returned the source unchanged. Return ONLY ${to}.`,text,4000)).trim();
+  }
+  if(out===text.trim()) throw new Error("Translation service returned the source text unchanged.");
+  return out;
 }
 $("trGo").onclick=async()=>{
   const text=$("trInput").value.trim(); if(!text) return;
+  updateTranslateLangUi();
+  const from=$("trFrom").value, to=$("trTo").value;
   const btn=$("trGo"); btn.disabled=true; btn.textContent=t("translating");
-  try{ const out=await translatePlain(text,$("trFrom").value,$("trTo").value); $("trResult").textContent=out; $("trResult").classList.remove("empty"); }
-  catch(e){ toast("Could not translate: "+e.message); }
+  try{
+    const out=await translatePlain(text,from,to);
+    $("trResult").textContent=out; $("trResult").classList.remove("empty");
+    $("trResultLang").textContent=FLAG[to]||"🌐";
+  }
+  catch(e){ $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); toast("Could not translate: "+e.message); }
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
 };
 $("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").textContent); toast("Translation copied."); }catch{ toast("Could not copy."); } };
