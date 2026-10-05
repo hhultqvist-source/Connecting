@@ -80,7 +80,8 @@ async function handleTTS(req,res){
   let raw="";
   for await(const chunk of req){ raw+=chunk; if(raw.length>256000){ res.writeHead(413,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Text is too long."})); } }
   let body; try{ body=JSON.parse(raw||"{}"); }catch{ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Invalid JSON."})); }
-  const text=String(body.text||"").trim().slice(0,12000);\n  const language=String(body.language||"");
+  const text=String(body.text||"").trim().slice(0,12000);
+  const language=String(body.language||"");
   if(!text){ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Missing text."})); }
   // ElevenLabs' multilingual model speaks the supplied target-language text directly.
   const voiceId=process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
