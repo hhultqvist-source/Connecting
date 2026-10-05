@@ -17,7 +17,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
-html,body{height:100%}
+html,body{height:100%;height:100dvh;min-height:0}
 body{
   font-family:var(--sans); color:var(--ink); background:var(--night);
   display:flex; flex-direction:column; overflow:hidden;
@@ -319,7 +319,7 @@ body.composer-expanded-active #empty{display:none!important}
 .msg .orig{display:none!important}
 .msg.show-original .orig{display:block!important}
 
-.bottomnav{height:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));padding:6px 18px max(6px,env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(3,1fr);align-items:center;gap:12px;border-top:1px solid var(--line);background:rgba(11,15,39,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:12}
+.bottomnav{flex:0 0 auto;position:relative;bottom:0;width:100%;height:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));padding:6px 18px max(6px,env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(3,1fr);align-items:center;gap:12px;border-top:1px solid var(--line);background:rgba(11,15,39,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:12}
 .bottomnav>*{width:100%;justify-self:stretch}
 .bottom-translate-action{height:42px;min-width:0;padding:0 14px;border-radius:14px;background:var(--amber);color:var(--amber-ink);font-size:13px;font-weight:800;box-shadow:0 6px 18px rgba(255,181,71,.18);white-space:nowrap}
 .bottom-translate-action:disabled{opacity:.45}
@@ -1038,12 +1038,24 @@ function autosize(){
   const oneLine = Math.ceil(line + pad);
   const twoLines = Math.ceil(line * 2 + pad + 2);
 
-  // iOS Safari can report scrollHeight as if the textarea had already grown,
-  // which made a visibly wrapped third line stay in compact mode. Measure
-  // against an actual two-line box instead: overflow beyond it means line 3.
+  // Measure wrapping independently from textarea height so iOS cannot hide
+  // the transition when the third visual line appears.
+  const mirror = document.createElement("div");
+  const usableWidth = Math.max(1, i.clientWidth - (parseFloat(cs.paddingLeft)||0) - (parseFloat(cs.paddingRight)||0));
+  Object.assign(mirror.style,{
+    position:"fixed",left:"-10000px",top:"0",visibility:"hidden",pointerEvents:"none",
+    width:usableWidth+"px",font:cs.font,fontFamily:cs.fontFamily,fontSize:cs.fontSize,
+    fontWeight:cs.fontWeight,letterSpacing:cs.letterSpacing,lineHeight:cs.lineHeight,
+    whiteSpace:"pre-wrap",overflowWrap:"break-word",wordBreak:"break-word"
+  });
+  mirror.textContent = i.value || " ";
+  document.body.appendChild(mirror);
+  const visualLines = Math.max(1, Math.ceil(mirror.getBoundingClientRect().height / line));
+  mirror.remove();
+
   i.style.height = twoLines + "px";
-  const wanted = i.scrollHeight;
-  const expanded = i.value.trim().length > 0 && wanted > i.clientHeight + 1;
+  const wanted = Math.max(i.scrollHeight, Math.ceil(visualLines * line + pad));
+  const expanded = i.value.trim().length > 0 && visualLines >= 3;
 
   field.classList.toggle("input-expanded", expanded);
   composer.classList.toggle("composer-expanded", expanded);
@@ -2168,8 +2180,14 @@ function rtcSubscribe(){
     });
 }
 
+/* Preserve the working local path: realtime may enhance delivery, but it
+   must never disable writing or the send arrow while a private session is
+   unavailable. */
+const localSendText = sendText;
+
 /* Override the prototype send function with the real backend send path. */
 sendText = async function(textArg,{audioUrl,seconds}={}){
+  if (!RTC.ready) return localSendText(textArg,{audioUrl,seconds});
   const text=(textArg ?? $("input").value).trim();
   if (!text) return;
   if (!RTC.ready) { toast("Connecting is still starting…"); return; }
@@ -2214,7 +2232,7 @@ sendText = async function(textArg,{audioUrl,seconds}={}){
 async function rtcInit(){
   try {
     if (!window.supabase?.createClient) throw new Error("Supabase client could not load.");
-    $("sendBtn").disabled=true;
+    $("sendBtn").disabled=false;
     rtcStatus("Connecting…");
 
     RTC.sb=window.supabase.createClient(CONNECTING_SUPABASE_URL,CONNECTING_SUPABASE_KEY,{
@@ -2248,8 +2266,9 @@ async function rtcInit(){
       user:RTC.user.id
     });
   } catch(e) {
-    rtcError(e,"Could not start Connecting realtime.");
-    $("sendBtn").disabled=true;
+    console.warn("[Connecting] realtime unavailable; local chat remains active",e);
+    rtcStatus(t("ready"));
+    $("sendBtn").disabled=false;
   }
 }
 
