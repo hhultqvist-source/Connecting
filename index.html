@@ -508,11 +508,11 @@ body.chat-only .chat{padding-bottom:8px}
   <div class="splittranslate">
     <div class="transpane source">
       <textarea id="trInput" maxlength="12000" rows="1" placeholder="Type or paste text…" autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trDictate" type="button" aria-label="Dictate with iPhone">🎙️ Dictate</button><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
+      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
     </div>
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
-      <div class="transresult empty" id="trResult">Your translation will appear here.</div>
+      <textarea class="transresult empty" id="trResult" maxlength="12000" rows="1" placeholder="Your translation will appear here." autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
       <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><button id="trListen">Listen</button><button id="trCopy">Copy</button></div></div>
     </div>
   </div>
@@ -1960,13 +1960,13 @@ function updateTranslateLangUi(){
 function translateLanguageChanged(){
   updateTranslateLangUi();
   const r=$("trResult");
-  r.textContent=t("translationPlaceholder");
+  r.value="";
   r.classList.add("empty");
 }
 $("trFrom").onchange=translateLanguageChanged; $("trTo").onchange=translateLanguageChanged;
-$("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.textContent; $("trCount").textContent=$("trInput").value.length; r.textContent=t("translationPlaceholder"); r.classList.add("empty"); } };
+$("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.value; $("trCount").textContent=$("trInput").value.length; r.value=""; r.classList.add("empty"); } };
 $("trInput").addEventListener("input",()=>{$("trCount").textContent=$("trInput").value.length;});
-$("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); $("trInput").focus();};
+$("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").value=""; $("trResult").classList.add("empty"); $("trInput").focus();};
 $("trPaste").onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ $("trInput").value=t.slice(0,12000); $("trCount").textContent=$("trInput").value.length; $("trInput").focus(); } }catch{ toast("Tillåt åtkomst till urklipp, eller klistra in manuellt."); } };
 async function translatePlain(text,from,to){
   if(from===to) return text;
@@ -1986,22 +1986,17 @@ $("trGo").onclick=async()=>{
   const btn=$("trGo"); btn.disabled=true; btn.textContent=t("translating");
   try{
     const out=await translatePlain(text,from,to);
-    $("trResult").textContent=out; $("trResult").classList.remove("empty");
+    $("trResult").value=out; $("trResult").classList.remove("empty");
     $("trResultLang").textContent=FLAG[to]||"🌐";
   }
-  catch(e){ $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); toast("Could not translate: "+e.message); }
+  catch(e){ $("trResult").value=""; $("trResult").classList.add("empty"); toast("Could not translate: "+e.message); }
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
 };
-$("trDictate").onclick=()=>{
-  const input=$("trInput");
-  input.focus({preventScroll:false});
-  try{ input.setSelectionRange(input.value.length,input.value.length); }catch{}
-  toast("Tap the microphone on the iPhone keyboard and dictate. Review the text, then press Translate.");
-};
-$("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").textContent); toast("Translation copied."); }catch{ toast("Could not copy."); } };
+$("trResult").addEventListener("input",()=>{ $("trResult").classList.toggle("empty",!$("trResult").value.trim()); });
+$("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").value); toast("Translation copied."); }catch{ toast("Could not copy."); } };
 $("trListen").onclick=()=>{
   if($("trResult").classList.contains("empty")) return;
-  const btn=$("trListen"), text=$("trResult").textContent.trim(), lang=$("trTo").value;
+  const btn=$("trListen"), text=$("trResult").value.trim(), lang=$("trTo").value;
   if(current?.btn===btn){ current.stop(); current=null; return; }
   if(!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)){ toast("Speech is not available on this iPhone."); return; }
 
