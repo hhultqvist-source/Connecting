@@ -376,6 +376,7 @@ body.chat-only .chat{padding-bottom:8px}
 /* Compact chat media: photos must never dominate the conversation */
 #chatView .msg:has(> img),#chatView .msg:has(> video){max-width:58%!important;padding:6px!important}
 #chatView .msg>img,#chatView .msg>video{display:block!important;width:auto!important;height:auto!important;max-width:180px!important;max-height:220px!important;object-fit:cover!important;border-radius:10px!important}
+#chatView .msg:has(> img)>.tr,#chatView .msg:has(> img)>.meta,#chatView .msg:has(> img)>.orig{display:none!important}
 @media(max-width:520px){
   #chatView .msg:has(> img),#chatView .msg:has(> video){max-width:56%!important}
   #chatView .msg>img,#chatView .msg>video{max-width:min(170px,44vw)!important;max-height:210px!important}
@@ -1131,18 +1132,12 @@ async function toJpeg(file){
 }
 
 async function sendImage(file){
-  const { to } = langs(); const side = state.speaker;
+  const side = state.speaker;
   let dataUrl;
   try { dataUrl = await toJpeg(file); } catch { toast("Bilden gick inte att öppna."); return; }
   const b = bubble(side, { imgUrl:dataUrl });
-  try {
-    const t = await callClaude(
-      `Read all text in the image and translate it into ${to}. If there is no text, describe the image in one short sentence in ${to}. Output ONLY the result.`,
-      [{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:dataUrl.split(",")[1] } },
-       { type:"text", text:"Translate the text in this image." }], 2000
-    );
-    b.done(t, to, "[bild]");
-  } catch(err){ b.fail("Could not read the image: " + err.message); }
+  // Photos are media only. Never send them to Claude and never generate captions/OCR text.
+  b.done("", ROLE.defaultWrite, "[bild]");
 }
 
 async function sendPdf(file){
@@ -1855,7 +1850,8 @@ function fillTranslateLanguages(){
     $("trTo").add(new Option(`${FLAG[v]||"🌐"} ${n}`, v));
   }
   const savedFrom = store.get("connecting-tr-from") || "Swedish";
-  const savedTo = store.get("connecting-tr-to") || "Russian";
+  let savedTo = store.get("connecting-tr-to") || "Russian";
+  if (IS_OWNER && savedTo === "Italian") savedTo = "Russian";
   $("trFrom").value = L[savedFrom] ? savedFrom : "Swedish";
   $("trTo").value = L[savedTo] ? savedTo : "Russian";
   updateTranslateLangUi();
@@ -1871,10 +1867,31 @@ function translateLanguageChanged(){
   const r=$("trResult");
   r.textContent=t("translationPlaceholder");
   r.classList.add("empty");
+  clearTimeout(trLiveTimer);
+  if($("trInput").value.trim()) trLiveTimer=setTimeout(runLiveTranslation,120);
 }
 $("trFrom").onchange=translateLanguageChanged; $("trTo").onchange=translateLanguageChanged;
 $("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.textContent; $("trCount").textContent=$("trInput").value.length; r.textContent=t("translationPlaceholder"); r.classList.add("empty"); } };
-$("trInput").addEventListener("input",()=>{$("trCount").textContent=$("trInput").value.length;});
+let trLiveTimer=null, trLiveSeq=0;
+async function runLiveTranslation(){
+  const text=$("trInput").value.trim();
+  const result=$("trResult");
+  if(!text){ result.textContent=t("translationPlaceholder"); result.classList.add("empty"); return; }
+  const seq=++trLiveSeq;
+  try{
+    const out=await translatePlain(text,$("trFrom").value,$("trTo").value);
+    if(seq!==trLiveSeq) return;
+    result.textContent=out; result.classList.remove("empty");
+  }catch(e){
+    if(seq!==trLiveSeq) return;
+    result.textContent=t("translationPlaceholder"); result.classList.add("empty");
+  }
+}
+$("trInput").addEventListener("input",()=>{
+  $("trCount").textContent=$("trInput").value.length;
+  clearTimeout(trLiveTimer);
+  trLiveTimer=setTimeout(runLiveTranslation,550);
+});
 $("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); $("trInput").focus();};
 $("trPaste").onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ $("trInput").value=t.slice(0,12000); $("trCount").textContent=$("trInput").value.length; $("trInput").focus(); } }catch{ toast("Tillåt åtkomst till urklipp, eller klistra in manuellt."); } };
 async function translatePlain(text,from,to){
