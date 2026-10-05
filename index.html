@@ -371,6 +371,22 @@ body.chat-only .chat{padding-bottom:8px}
 #aiBtn.active{background:rgba(127,214,194,.14);color:var(--fjord)}
 #input{autocorrect:on}
 
+
+/* Connecting mobile readability corrections */
+#chatView .chat{gap:9px!important}
+#chatView .msg{max-width:76%!important;padding:9px 12px 8px!important;gap:5px!important;box-shadow:none!important}
+#chatView .msg.me{background:rgba(24,32,82,.96)!important;color:#FFD8A8!important;border:1px solid rgba(255,181,71,.28)!important;border-radius:16px 16px 5px 16px!important}
+#chatView .msg.them{background:rgba(24,32,82,.96)!important;color:#9FE8DA!important;border:1px solid rgba(127,214,194,.24)!important;border-radius:16px 16px 16px 5px!important}
+#chatView .tr{font-family:var(--sans)!important;font-size:15.5px!important;line-height:1.38!important;font-weight:400!important}
+#chatView .meta{gap:6px!important}
+#chatView .meta span{font-size:10.5px!important}
+#chatView .say{font-size:11px!important;padding:4px 7px!important}
+#chatView .msg img,#chatView .msg video{max-width:220px!important;border-radius:11px!important}
+@media(max-width:520px){
+  #chatView .msg{max-width:78%!important}
+  #chatView .composer.composer-expanded .field{height:min(290px,36dvh)!important}
+  #chatView .composer.composer-expanded #input{font-size:16px!important;line-height:1.42!important;padding:4px 5px!important;text-align:left!important}
+}
 </style>
 </head>
 <body>
@@ -997,7 +1013,7 @@ async function sendText(textArg, { audioUrl, seconds } = {}){
   const run = async () => {
     try {
       const out = route.needsTranslation ? await translate(text, route.from, route.to, side) : text;
-      b.done(out, route.to, text);
+      b.done(text, route.from, text);
       setStatus(t("ready"));
     } catch(e){ b.fail("Could not translate: " + e.message, run); }
     finally { btn.classList.remove("pending"); btn.removeAttribute("aria-busy"); }
@@ -1016,65 +1032,40 @@ $("input").addEventListener("keydown", e => {
 });
 
 function autosize(){
-  const i = $("input");
-  if (!i) return;
-  const field = i.closest(".field");
-  const composer = i.closest(".composer");
-  if (!field || !composer) return;
+  const i=$("input");
+  if(!i) return;
+  const field=i.closest(".field"), composer=i.closest(".composer");
+  if(!field||!composer) return;
 
-  // Always measure from the compact layout first. Otherwise the fixed expanded
-  // grid stretches an empty textarea and makes it impossible to collapse.
   field.classList.remove("input-expanded");
   composer.classList.remove("composer-expanded");
   document.body.classList.remove("composer-expanded-active");
-  i.style.height = "auto";
-  i.style.minHeight = "";
-  i.style.maxHeight = "";
-  i.style.overflowY = "hidden";
+  field.style.removeProperty("--composer-expanded-h");
 
-  const cs = getComputedStyle(i);
-  const line = parseFloat(cs.lineHeight) || 22.4;
-  const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-  const oneLine = Math.ceil(line + pad);
-  const twoLines = Math.ceil(line * 2 + pad + 2);
+  i.style.height="auto";
+  i.style.minHeight="";
+  i.style.maxHeight="";
+  i.style.overflowY="hidden";
 
-  // Measure wrapping independently from textarea height so iOS cannot hide
-  // the transition when the third visual line appears.
-  const mirror = document.createElement("div");
-  const usableWidth = Math.max(1, i.clientWidth - (parseFloat(cs.paddingLeft)||0) - (parseFloat(cs.paddingRight)||0));
-  Object.assign(mirror.style,{
-    position:"fixed",left:"-10000px",top:"0",visibility:"hidden",pointerEvents:"none",
-    width:usableWidth+"px",font:cs.font,fontFamily:cs.fontFamily,fontSize:cs.fontSize,
-    fontWeight:cs.fontWeight,letterSpacing:cs.letterSpacing,lineHeight:cs.lineHeight,
-    whiteSpace:"pre-wrap",overflowWrap:"break-word",wordBreak:"break-word"
-  });
-  mirror.textContent = i.value || " ";
-  document.body.appendChild(mirror);
-  const visualLines = Math.max(1, Math.ceil(mirror.getBoundingClientRect().height / line));
-  mirror.remove();
+  const cs=getComputedStyle(i);
+  const line=parseFloat(cs.lineHeight)||22.4;
+  const pad=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+  const twoLines=Math.ceil(line*2+pad);
+  const needed=i.scrollHeight;
+  const expanded=i.value.trim().length>0 && needed>twoLines+2;
 
-  i.style.height = twoLines + "px";
-  const wanted = Math.max(i.scrollHeight, Math.ceil(visualLines * line + pad));
-  const expanded = i.value.trim().length > 0 && visualLines >= 3;
-
-  field.classList.toggle("input-expanded", expanded);
-  composer.classList.toggle("composer-expanded", expanded);
-  document.body.classList.toggle("composer-expanded-active", expanded);
-
-  if (expanded) {
-    // Large writing surface, but sized to the actual text instead of leaving
-    // a large empty block. It still grows and scrolls for long messages.
-    const expandedHeight = Math.min(Math.max(wanted + 66, 150), Math.min(320, innerHeight * .38));
-    field.style.setProperty("--composer-expanded-h", expandedHeight + "px");
-    i.style.height = "100%";
-    i.style.minHeight = "0";
-    i.style.maxHeight = "none";
-    i.style.overflowY = "auto";
-  } else {
-    field.style.removeProperty("--composer-expanded-h");
-    const target = Math.max(oneLine, Math.min(wanted, twoLines));
-    i.style.height = target + "px";
-    i.style.overflowY = "hidden";
+  if(expanded){
+    field.classList.add("input-expanded");
+    composer.classList.add("composer-expanded");
+    document.body.classList.add("composer-expanded-active");
+    field.style.setProperty("--composer-expanded-h", Math.min(290,innerHeight*.36)+"px");
+    i.style.height="100%";
+    i.style.minHeight="0";
+    i.style.maxHeight="none";
+    i.style.overflowY="auto";
+  }else{
+    i.style.height=Math.max(Math.ceil(line+pad),Math.min(needed,twoLines))+"px";
+    i.style.overflowY="hidden";
   }
 }
 $("input").addEventListener("input", () => {
@@ -1867,7 +1858,13 @@ function updateTranslateLangUi(){
   $("trToFlag").textContent=FLAG[t]||"🌐"; $("trToName").textContent=L[t].name; $("trResultLang").textContent=FLAG[t]||"🌐";
   $("trInput").lang=L[f].code; store.set("connecting-tr-from",f); store.set("connecting-tr-to",t);
 }
-$("trFrom").onchange=updateTranslateLangUi; $("trTo").onchange=updateTranslateLangUi;
+function translateLanguageChanged(){
+  updateTranslateLangUi();
+  const r=$("trResult");
+  r.textContent=t("translationPlaceholder");
+  r.classList.add("empty");
+}
+$("trFrom").onchange=translateLanguageChanged; $("trTo").onchange=translateLanguageChanged;
 $("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.textContent; $("trCount").textContent=$("trInput").value.length; r.textContent=t("translationPlaceholder"); r.classList.add("empty"); } };
 $("trInput").addEventListener("input",()=>{$("trCount").textContent=$("trInput").value.length;});
 $("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); $("trInput").focus();};
