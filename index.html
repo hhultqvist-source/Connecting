@@ -317,7 +317,8 @@ body.composer-expanded-active #empty{display:none!important}
 #chatView .composer.composer-expanded #sendBtn{grid-column:5;grid-row:2}
 body.composer-expanded-active #empty{display:none!important}
 .msg .orig{display:none!important}
-.msg.show-original .orig{display:block!important}
+.msg.show-original .orig{display:block!important;font-size:15.5px!important;line-height:1.38!important;color:inherit!important;opacity:1!important;border-top:0!important;padding-top:0!important}
+.msg.show-original>.tr{display:none!important}
 
 .bottomnav{flex:0 0 auto;position:relative;bottom:0;width:100%;height:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));padding:6px 18px max(6px,env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(3,1fr);align-items:center;gap:12px;border-top:1px solid var(--line);background:rgba(11,15,39,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:12}
 .bottomnav>*{width:100%;justify-self:stretch}
@@ -372,6 +373,12 @@ body.chat-only .chat{padding-bottom:8px}
 #input{autocorrect:on}
 
 
+
+/* Tap-to-enlarge chat photos */
+.chat-photo{cursor:zoom-in}
+.photo-viewer{position:fixed;inset:0;z-index:1000;background:rgba(3,6,20,.94);display:flex;align-items:center;justify-content:center;padding:22px}
+.photo-viewer img{max-width:100%;max-height:90dvh;object-fit:contain;border-radius:12px}
+.photo-viewer-close{position:absolute;top:max(18px,env(safe-area-inset-top));right:18px;width:46px;height:46px;border-radius:50%;background:rgba(24,32,82,.94);color:#fff;font-size:32px;line-height:1;border:1px solid rgba(255,255,255,.2)}
 
 /* Compact chat media: photos must never dominate the conversation */
 #chatView .msg:has(> img),#chatView .msg:has(> video){max-width:58%!important;padding:6px!important}
@@ -962,6 +969,15 @@ Output ONLY the translation, nothing else.`;
   return callClaude(sys, text);
 }
 
+/* ---------- Photo viewer ---------- */
+function openPhotoViewer(src){
+  const back=document.createElement("div"); back.className="photo-viewer";
+  const img=new Image(); img.src=src; img.alt="";
+  const close=document.createElement("button"); close.type="button"; close.className="photo-viewer-close"; close.textContent="×"; close.setAttribute("aria-label","Close");
+  const done=()=>back.remove(); close.onclick=done; back.onclick=e=>{if(e.target===back)done();};
+  back.append(img,close); document.body.appendChild(back);
+}
+
 /* ---------- Bubble ---------- */
 function bubble(side, { original, imgUrl, audioUrl, videoUrl, seconds } = {}){
   $("empty")?.remove();
@@ -973,7 +989,11 @@ function bubble(side, { original, imgUrl, audioUrl, videoUrl, seconds } = {}){
   const tr = document.createElement("div");
   tr.innerHTML = '<div class="dots"><i></i><i></i><i></i></div>';
   div.appendChild(tr);
-  if (imgUrl) { const i = new Image(); i.src = imgUrl; i.alt = ""; div.insertBefore(i, tr); }
+  if (imgUrl) {
+    const i = new Image(); i.src = imgUrl; i.alt = ""; i.className="chat-photo"; i.setAttribute("role","button"); i.setAttribute("tabindex","0");
+    const open=()=>openPhotoViewer(imgUrl); i.onclick=open; i.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
+    div.insertBefore(i, tr);
+  }
   if (videoUrl) { const v = document.createElement("video"); v.controls = true; v.playsInline = true; v.src = videoUrl; div.insertBefore(v, tr); }
   if (audioUrl) div.appendChild(voicePlayer(audioUrl, seconds));
   const orig = document.createElement("div"); orig.className = "orig";
@@ -1867,31 +1887,10 @@ function translateLanguageChanged(){
   const r=$("trResult");
   r.textContent=t("translationPlaceholder");
   r.classList.add("empty");
-  clearTimeout(trLiveTimer);
-  if($("trInput").value.trim()) trLiveTimer=setTimeout(runLiveTranslation,120);
 }
 $("trFrom").onchange=translateLanguageChanged; $("trTo").onchange=translateLanguageChanged;
 $("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.textContent; $("trCount").textContent=$("trInput").value.length; r.textContent=t("translationPlaceholder"); r.classList.add("empty"); } };
-let trLiveTimer=null, trLiveSeq=0;
-async function runLiveTranslation(){
-  const text=$("trInput").value.trim();
-  const result=$("trResult");
-  if(!text){ result.textContent=t("translationPlaceholder"); result.classList.add("empty"); return; }
-  const seq=++trLiveSeq;
-  try{
-    const out=await translatePlain(text,$("trFrom").value,$("trTo").value);
-    if(seq!==trLiveSeq) return;
-    result.textContent=out; result.classList.remove("empty");
-  }catch(e){
-    if(seq!==trLiveSeq) return;
-    result.textContent=t("translationPlaceholder"); result.classList.add("empty");
-  }
-}
-$("trInput").addEventListener("input",()=>{
-  $("trCount").textContent=$("trInput").value.length;
-  clearTimeout(trLiveTimer);
-  trLiveTimer=setTimeout(runLiveTranslation,550);
-});
+$("trInput").addEventListener("input",()=>{$("trCount").textContent=$("trInput").value.length;});
 $("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").textContent=t("translationPlaceholder"); $("trResult").classList.add("empty"); $("trInput").focus();};
 $("trPaste").onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ $("trInput").value=t.slice(0,12000); $("trCount").textContent=$("trInput").value.length; $("trInput").focus(); } }catch{ toast("Tillåt åtkomst till urklipp, eller klistra in manuellt."); } };
 async function translatePlain(text,from,to){
