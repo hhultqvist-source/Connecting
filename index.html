@@ -369,6 +369,11 @@ body.chat-only .chat{padding-bottom:8px}
 #aiPrompt{width:100%;min-height:52px;max-height:110px;margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.035);color:var(--ink);font-size:13px;line-height:1.4;resize:vertical;outline:0}
 #aiPrompt:focus{border-color:rgba(127,214,194,.55)}
 #aiPrompt::placeholder{color:var(--mute)}
+.ai-review{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.ai-review-head{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;color:var(--mute);margin-bottom:7px}.ai-review-head b{color:var(--amber)}
+#aiSwedishDraft{width:100%;min-height:120px;max-height:230px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.035);color:var(--ink);font-size:14px;line-height:1.42;outline:0}
+.ai-review-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}.ai-review-actions button{height:34px;padding:0 11px;border-radius:11px;border:1px solid var(--line);font-size:12px}.ai-review-actions #aiUseTarget{background:var(--fjord);color:var(--night);font-weight:700}
+.ai-final{margin-top:9px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025);font-size:14px;line-height:1.42;white-space:pre-wrap;max-height:190px;overflow:auto}.ai-final b{display:block;color:var(--fjord);font-size:12px;margin-bottom:6px}
 #aiBtn.active{background:rgba(127,214,194,.14);color:var(--fjord)}
 #input{autocorrect:on}
 
@@ -448,6 +453,12 @@ body.chat-only .chat{padding-bottom:8px}
     <div class="ai-tones tones" id="tones" role="group" aria-label="Tone"></div>
     <textarea id="aiPrompt" rows="2" placeholder="Ask AI to write anything — e.g. 'Write a thank-you email', 'Reply politely', 'Make this shorter'…"></textarea>
     <div class="ai-actions"><small id="aiHint">AI changes as little as possible.</small><button id="aiApply">Suggest reply</button></div>
+    <div class="ai-review" id="aiReview" hidden>
+      <div class="ai-review-head"><b>🇸🇪 Swedish · Original</b><span id="aiTargetLabel"></span></div>
+      <textarea id="aiSwedishDraft" rows="6" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="Swedish review copy"></textarea>
+      <div class="ai-review-actions"><button id="aiUpdateTarget">Update translation</button><button id="aiUseTarget">Use final text</button></div>
+      <div class="ai-final" id="aiFinalWrap"><b id="aiFinalLabel">Final</b><div id="aiFinalText"></div></div>
+    </div>
   </div>
   <div class="sheet" id="sheet" hidden role="menu">
     <button role="menuitem" data-a="lib">
@@ -1419,6 +1430,34 @@ Keep it tasteful and context-aware. Emojis are optional and should be sparse, ne
   };
   return map[state.tone] || "Selected tone: Natural. Write naturally in the user's own voice.";
 }
+function requestedLanguage(prompt){
+  const p=(prompt||"").toLowerCase();
+  const map=[["swedish","Swedish"],["svenska","Swedish"],["english","English"],["engelska","English"],["russian","Russian"],["ryska","Russian"],["french","French"],["franska","French"],["german","German"],["tyska","German"],["spanish","Spanish"],["spanska","Spanish"],["italian","Italian"],["italienska","Italian"],["norwegian","Norwegian"],["norska","Norwegian"],["danish","Danish"],["danska","Danish"],["finnish","Finnish"],["finska","Finnish"],["portuguese","Portuguese"],["portugisiska","Portuguese"],["icelandic","Icelandic"],["isländska","Icelandic"]];
+  for(const [k,v] of map) if(p.includes(k)) return v;
+  return null;
+}
+let aiReviewTarget="";
+async function buildAiBilingualReview(customPrompt,selectedTone,contextText){
+  const target=requestedLanguage(customPrompt);
+  if(!target || target==="Swedish") return false;
+  const swedish=await callClaude(
+    `Write the requested text in Swedish first so the user can review its exact meaning. Apply the selected tone: ${selectedTone}. Do not translate yet. Return ONLY the complete Swedish sendable text.`,
+    `WRITING TASK:\n${customPrompt}\n\n${contextText||""}`,4000);
+  const finalText=await translatePlain(swedish,"Swedish",target);
+  aiReviewTarget=target;
+  $("aiSwedishDraft").value=swedish;
+  $("aiTargetLabel").textContent=`→ ${FLAG[target]||"🌐"} ${target}`;
+  $("aiFinalLabel").textContent=`${FLAG[target]||"🌐"} ${target} · Final`;
+  $("aiFinalText").textContent=finalText;
+  $("aiReview").hidden=false;
+  return true;
+}
+async function updateAiReviewTarget(){
+  const sw=$("aiSwedishDraft").value.trim(); if(!sw||!aiReviewTarget) return;
+  const b=$("aiUpdateTarget"); b.disabled=true;
+  try{$("aiFinalText").textContent=await translatePlain(sw,"Swedish",aiReviewTarget);}
+  catch(e){toast(e.message);} finally{b.disabled=false;}
+}
 async function aiSuggest(focus){
   if (!CAN_USE_AI) return;
   const my = $("myLang").value;
@@ -1450,6 +1489,12 @@ Do not explain what you did. Output ONLY the finished sendable text.`;
       (style ? `\n\nUser's natural writing examples, style reference only:\n${style}` : "") +
       `\n\nPerform the WRITING TASK in the mandatory SELECTED TONE. Return only the finished sendable text.`;
 
+    const contextText=(draft.trim() ? `Current draft:\n${draft}\n\n` : "")+(focus ? `Message to respond to:\n${focus.text}\n\n` : "")+(ctx ? `Conversation context:\n${ctx}` : "");
+    if(customPrompt && await buildAiBilingualReview(customPrompt,selectedTone,contextText)){
+      // Keep the review tray open: Swedish is editable, target language is final.
+      updateAiAction();
+      return;
+    }
     const result = await callClaude(sys,user);
     $("input").value=result;
     setAiTray(false);
@@ -1473,6 +1518,8 @@ function setAiTray(open){
   if (!CAN_USE_AI || !$("aiTray") || !$("aiBtn")) return;
   $("aiTray").hidden=!open; $("aiBtn").classList.toggle("active",open);
   if(open) {
+    if($("aiReview")) $("aiReview").hidden=true;
+    aiReviewTarget="";
     if (!$("input").value.trim()) {
       $("input").closest(".field")?.classList.remove("input-expanded");
       $("input").closest(".composer")?.classList.remove("composer-expanded");
@@ -1489,6 +1536,13 @@ if (CAN_USE_AI) {
   $("aiBtn").onclick = e => { e.stopPropagation(); setAiTray($("aiTray").hidden); };
   $("aiClose").onclick = () => setAiTray(false);
   $("aiApply").onclick = () => aiSuggest();
+  $("aiUpdateTarget").onclick = updateAiReviewTarget;
+  $("aiSwedishDraft").addEventListener("input",()=>{ if(aiReviewTarget) $("aiTargetLabel").textContent=`Edited · update → ${FLAG[aiReviewTarget]||"🌐"} ${aiReviewTarget}`; });
+  $("aiUseTarget").onclick = () => {
+    const finalText=$("aiFinalText").textContent.trim(); if(!finalText) return;
+    $("input").value=finalText; setAiTray(false); autosize(); $("input").focus();
+    try{$("input").setSelectionRange(finalText.length,finalText.length);}catch{}
+  };
   $("input").addEventListener("input", updateAiAction);
   $("aiPrompt")?.addEventListener("input", updateAiAction);
 }
