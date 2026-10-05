@@ -1997,23 +1997,43 @@ $("trListen").onclick=()=>{
   if($("trResult").classList.contains("empty")) return;
   const btn=$("trListen"), text=$("trResult").textContent.trim(), lang=$("trTo").value;
   if(current?.btn===btn){ current.stop(); current=null; return; }
-  // iPhone/Safari: start speech synchronously inside the user's tap gesture.
-  try{
-    speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);
-    u.lang=L[lang]?.code||"en-US";
-    u.rate=0.95; u.pitch=1; u.volume=1;
-    const voices=speechSynthesis.getVoices?.()||[];
-    const code=u.lang.toLowerCase(), base=code.split("-")[0];
-    u.voice=voices.find(v=>v.lang.toLowerCase()===code)||voices.find(v=>v.lang.toLowerCase().startsWith(base+"-"))||null;
-    btn.textContent="Stop"; btn.classList.add("playing");
-    const finish=()=>{ btn.textContent="Listen"; btn.classList.remove("playing"); if(current?.btn===btn) current=null; };
-    u.onend=finish; u.onerror=(e)=>{ finish(); console.warn("Speech synthesis error",e); toast("Could not play this voice."); };
-    current={btn,stop(){ speechSynthesis.cancel(); finish(); }};
-    speechSynthesis.speak(u);
-    // iOS can occasionally pause a freshly queued utterance; explicitly resume it.
-    setTimeout(()=>{ try{ if(speechSynthesis.paused) speechSynthesis.resume(); }catch{} },120);
-  }catch(e){ btn.textContent="Listen"; btn.classList.remove("playing"); toast("Could not play this voice."); }
+  if(!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)){ toast("Speech is not available on this iPhone."); return; }
+
+  const finish=()=>{ btn.textContent="Listen"; btn.classList.remove("playing"); if(current?.btn===btn) current=null; };
+  const start=()=>{
+    try{
+      const synth=window.speechSynthesis;
+      const code=L[lang]?.code||"en-US", base=code.split("-")[0].toLowerCase();
+      const voices=synth.getVoices()||[];
+      const voice=voices.find(v=>v.lang.toLowerCase()===code.toLowerCase())
+        ||voices.find(v=>v.lang.toLowerCase().split("-")[0]===base)
+        ||null;
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang=code; if(voice) u.voice=voice;
+      u.rate=.95; u.pitch=1; u.volume=1;
+      u.onstart=()=>{ btn.textContent="Stop"; btn.classList.add("playing"); };
+      u.onend=finish;
+      u.onerror=e=>{ finish(); console.warn("Speech synthesis error",e); toast("iPhone could not start the "+lang+" voice."); };
+      current={btn,stop(){ synth.cancel(); finish(); }};
+      // Do not cancel immediately before speak on iOS; WebKit can swallow the next utterance.
+      if(synth.paused) synth.resume();
+      synth.speak(u);
+      // WebKit recovery: if the queue stalls, resume it without replacing the utterance.
+      setTimeout(()=>{ try{ if(current?.btn===btn && synth.paused) synth.resume(); }catch{} },250);
+    }catch(e){ finish(); toast("Could not start iPhone voice."); }
+  };
+
+  // Safari may expose its system voices a moment after first access.
+  const synth=window.speechSynthesis;
+  const voices=synth.getVoices()||[];
+  if(voices.length) start();
+  else{
+    btn.textContent="Loading voice…";
+    let done=false;
+    const ready=()=>{ if(done) return; done=true; synth.removeEventListener?.("voiceschanged",ready); start(); };
+    synth.addEventListener?.("voiceschanged",ready,{once:true});
+    setTimeout(ready,350);
+  }
 };
 
 /* Chat language profile: role-aware and intentionally limited per person. */
