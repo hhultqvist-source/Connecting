@@ -1993,7 +1993,28 @@ $("trGo").onclick=async()=>{
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
 };
 $("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").textContent); toast("Translation copied."); }catch{ toast("Could not copy."); } };
-$("trListen").onclick=()=>{ if($("trResult").classList.contains("empty")) return; speak($("trResult").textContent,$("trTo").value,$("trListen")); };
+$("trListen").onclick=()=>{
+  if($("trResult").classList.contains("empty")) return;
+  const btn=$("trListen"), text=$("trResult").textContent.trim(), lang=$("trTo").value;
+  if(current?.btn===btn){ current.stop(); current=null; return; }
+  // iPhone/Safari: start speech synchronously inside the user's tap gesture.
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=L[lang]?.code||"en-US";
+    u.rate=0.95; u.pitch=1; u.volume=1;
+    const voices=speechSynthesis.getVoices?.()||[];
+    const code=u.lang.toLowerCase(), base=code.split("-")[0];
+    u.voice=voices.find(v=>v.lang.toLowerCase()===code)||voices.find(v=>v.lang.toLowerCase().startsWith(base+"-"))||null;
+    btn.textContent="Stop"; btn.classList.add("playing");
+    const finish=()=>{ btn.textContent="Listen"; btn.classList.remove("playing"); if(current?.btn===btn) current=null; };
+    u.onend=finish; u.onerror=(e)=>{ finish(); console.warn("Speech synthesis error",e); toast("Could not play this voice."); };
+    current={btn,stop(){ speechSynthesis.cancel(); finish(); }};
+    speechSynthesis.speak(u);
+    // iOS can occasionally pause a freshly queued utterance; explicitly resume it.
+    setTimeout(()=>{ try{ if(speechSynthesis.paused) speechSynthesis.resume(); }catch{} },120);
+  }catch(e){ btn.textContent="Listen"; btn.classList.remove("playing"); toast("Could not play this voice."); }
+};
 
 /* Chat language profile: role-aware and intentionally limited per person. */
 configureRoleLanguageSettings();
