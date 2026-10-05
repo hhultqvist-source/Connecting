@@ -568,7 +568,7 @@ const ROLE = IS_OWNER ? {
   peerDefaultWrite:"Russian", peerDefaultRead:"Russian"
 } : {
   id:"B", peer:"A", ui:"ru",
-  writeOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese"], readOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese"],
+  writeOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese","Italian"], readOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese","Italian"],
   defaultWrite:"Russian", defaultRead:"Russian",
   peerDefaultWrite:"Swedish", peerDefaultRead:"Swedish"
 };
@@ -1823,7 +1823,7 @@ function configureRoleLanguageSettings(){
   fillSelectWithOptions($("profileMe"), ROLE.writeOptions, ownWrite);
   fillSelectWithOptions($("profileMeRead"), ROLE.readOptions, ownRead);
   const peerRole = IS_OWNER
-    ? {writeOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese"],readOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese"]}
+    ? {writeOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese","Italian"],readOptions:["Russian","Norwegian","English","German","French","Spanish","Danish","Icelandic","Finnish","Portuguese","Italian"]}
     : {writeOptions:["Swedish","English"],readOptions:["Swedish","English"]};
   fillSelectWithOptions($("profileThemWrite"), peerRole.writeOptions, peerWrite);
   fillSelectWithOptions($("profileThem"), peerRole.readOptions, peerRead);
@@ -1842,7 +1842,7 @@ function applyProfileLanguagesV7(){
 }
 
 /* ---------- Connecting v4 navigation + pure translation ---------- */
-const FLAG = {Swedish:"🇸🇪",English:"🇬🇧",Norwegian:"🇳🇴",Danish:"🇩🇰",Finnish:"🇫🇮",German:"🇩🇪",French:"🇫🇷",Spanish:"🇪🇸",Icelandic:"🇮🇸",Portuguese:"🇵🇹",Russian:"🇷🇺",Ukrainian:"🇺🇦",Polish:"🇵🇱",Estonian:"🇪🇪",Latvian:"🇱🇻",Lithuanian:"🇱🇹",Georgian:"🇬🇪",Armenian:"🇦🇲"};
+const FLAG = {Swedish:"🇸🇪",English:"🇬🇧",Norwegian:"🇳🇴",Danish:"🇩🇰",Finnish:"🇫🇮",German:"🇩🇪",French:"🇫🇷",Spanish:"🇪🇸",Icelandic:"🇮🇸",Portuguese:"🇵🇹",Italian:"🇮🇹",Russian:"🇷🇺",Ukrainian:"🇺🇦",Polish:"🇵🇱",Estonian:"🇪🇪",Latvian:"🇱🇻",Lithuanian:"🇱🇹",Georgian:"🇬🇪",Armenian:"🇦🇲"};
 
 document.querySelectorAll(".navbtn").forEach(btn => btn.addEventListener("click", () => {
   document.querySelectorAll(".navbtn").forEach(b => b.classList.toggle("active", b === btn));
@@ -2059,8 +2059,9 @@ async function rtcReadableText(row){
     return { text:row.original_text || "", lang:row.original_language || readLang };
   }
 
-  // Only A owns the private AI/translation key. B never needs an API key.
-  if (IS_OWNER && has(KEYS.claude) && row.original_text) {
+  // Incoming chat is always shown in the receiver's selected read language.
+  // Claude runs server-side, so neither A nor B needs a provider key in the browser.
+  if (row.original_text) {
     const ck = rtcTranslationCacheKey(row.id,readLang);
     const cached = store.get(ck);
     if (cached) return { text:cached, lang:readLang };
@@ -2199,9 +2200,9 @@ sendText = async function(textArg,{audioUrl,seconds}={}){
   try {
     let translated=null,translatedLang=null;
 
-    // A translates outbound messages for B before storing them.
-    // B sends its original language; A translates incoming messages privately on receipt.
-    if (IS_OWNER && route.needsTranslation) {
+    // Store a translated copy when available. The receiver still enforces its own
+    // current read language on render, so changing read language works independently.
+    if (route.needsTranslation) {
       translated=await translatePlain(text,route.from,route.to);
       translatedLang=route.to;
     } else if (!route.needsTranslation) {
