@@ -131,6 +131,7 @@ header{padding:14px 18px 12px;border-bottom:1px solid var(--line);position:relat
 .field:focus-within{border-color:rgba(127,214,194,.45)}
 .field .iconbtn{width:40px;height:40px;border-radius:50%;flex-shrink:0}
 #input{flex:1;min-width:0;background:none;border:0;outline:none;resize:none;overflow-y:hidden;font-size:16px;line-height:1.4;padding:9px 4px;max-height:140px;color:var(--ink)}
+.draft-cancel{flex:0 0 34px!important;width:34px!important;height:34px!important;border-radius:50%!important;font-size:25px!important;line-height:1!important;color:var(--mute)!important;background:rgba(255,255,255,.05)!important;border:1px solid var(--line)!important}
 .composer{position:relative}
 .sheet{position:absolute;left:12px;bottom:calc(100% - 4px);min-width:250px;background:var(--raise);border:1px solid var(--line);border-radius:18px;padding:6px;box-shadow:0 18px 40px rgba(5,8,25,.45);animation:in .18s ease-out;z-index:5}
 .sheet[hidden]{display:none}
@@ -485,6 +486,7 @@ body.chat-only .chat{padding-bottom:8px}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
     </button>
     <textarea id="input" rows="1" placeholder="Write in Swedish…" autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
+    <button class="iconbtn draft-cancel" id="draftCancel" aria-label="Discard message suggestion" title="Discard" hidden>×</button>
     <button class="iconbtn" id="aiBtn" aria-label="Open writing assist">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>
     </button>
@@ -1497,6 +1499,7 @@ Do not explain what you did. Output ONLY the finished sendable text.`;
     }
     const result = await callClaude(sys,user);
     $("input").value=result;
+    $("draftCancel").hidden=false;
     setAiTray(false);
     autosize();
     $("input").focus();
@@ -1540,11 +1543,18 @@ if (CAN_USE_AI) {
   $("aiSwedishDraft").addEventListener("input",()=>{ if(aiReviewTarget) $("aiTargetLabel").textContent=`Edited · update → ${FLAG[aiReviewTarget]||"🌐"} ${aiReviewTarget}`; });
   $("aiUseTarget").onclick = () => {
     const finalText=$("aiFinalText").textContent.trim(); if(!finalText) return;
-    $("input").value=finalText; setAiTray(false); autosize(); $("input").focus();
+    $("input").value=finalText; $("draftCancel").hidden=false; setAiTray(false); autosize(); $("input").focus();
     try{$("input").setSelectionRange(finalText.length,finalText.length);}catch{}
   };
   $("input").addEventListener("input", updateAiAction);
   $("aiPrompt")?.addEventListener("input", updateAiAction);
+  const syncDraftCancel=()=>{ $("draftCancel").hidden=!$("input").value.trim(); };
+  $("input").addEventListener("input",syncDraftCancel);
+  $("draftCancel").onclick=()=>{
+    $("input").value=""; $("draftCancel").hidden=true; setAiTray(false);
+    if($("aiReview")) $("aiReview").hidden=true; aiReviewTarget=""; autosize(); $("input").focus();
+  };
+  syncDraftCancel();
 }
 
 function replyWithAi(div){
