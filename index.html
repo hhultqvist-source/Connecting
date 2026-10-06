@@ -513,7 +513,7 @@ body.chat-only .chat{padding-bottom:8px}
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
       <textarea class="transresult empty" id="trResult" maxlength="12000" rows="1" placeholder="Your translation will appear here." autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trCopy">Copy</button></div></div>
+      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trSendVoice" hidden>Send Voice</button><button id="trCopy">Copy</button></div></div>
     </div>
   </div>
 </section>
@@ -1993,6 +1993,21 @@ $("trGo").onclick=async()=>{
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
 };
 $("trResult").addEventListener("input",()=>{ $("trResult").classList.toggle("empty",!$("trResult").value.trim()); });
+let translatorHenrikAudio=null;
+const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henrik"; $("trSendVoice").hidden=!henrik; if(!henrik) translatorHenrikAudio=null; };
+$("trVoice").addEventListener("change",syncTranslatorVoiceActions);
+syncTranslatorVoiceActions();
+$("trSendVoice").onclick=async()=>{
+  if($("trVoice")?.value!=="henrik" || !translatorHenrikAudio?.blob) return toast("Listen with Henrik first.");
+  const file=new File([translatorHenrikAudio.blob],"Henrik-voice.mp3",{type:translatorHenrikAudio.blob.type||"audio/mpeg"});
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share({files:[file]});
+    }else{
+      toast("Voice sharing is not supported on this device.");
+    }
+  }catch(e){ if(e?.name!=="AbortError") toast("Could not send voice."); }
+};
 $("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").value); toast("Translation copied."); }catch{ toast("Could not copy."); } };
 $("trListen").onclick=async()=>{
   if($("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
@@ -2002,7 +2017,7 @@ $("trListen").onclick=async()=>{
   try{
     const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"})});
     if(!res.ok){ let msg="Could not generate voice."; try{const d=await res.json(); if(d.message) msg=d.message;}catch{} throw new Error(msg); }
-    const blob=await res.blob(), url=URL.createObjectURL(blob), audio=new Audio(url);
+    const blob=await res.blob(); if($("trVoice")?.value==="henrik") translatorHenrikAudio={blob}; const url=URL.createObjectURL(blob), audio=new Audio(url);
     btn.disabled=false; btn.textContent="Stop"; btn.classList.add("playing");
     const finish=()=>{ try{URL.revokeObjectURL(url);}catch{} btn.disabled=false; btn.textContent="Listen"; btn.classList.remove("playing"); if(current?.btn===btn) current=null; };
     audio.onended=finish; audio.onerror=()=>{ finish(); toast("Could not play generated voice."); };
