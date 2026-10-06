@@ -341,7 +341,7 @@ body.composer-expanded-active #empty{display:none!important}
 .transresult{white-space:pre-wrap;overflow-wrap:anywhere}.transresult.empty{color:var(--mute)}
 .panefoot{position:absolute;left:12px;right:12px;bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;pointer-events:none}
 .panefoot .count{font-size:11px;color:var(--mute)}
-.paneactions{display:flex;gap:6px;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 72px)}#trSendVoice{flex-basis:100%}.paneactions button,.paneactions #trVoice{height:32px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:rgba(15,20,51,.8);font-size:12px;color:var(--ink)}.paneactions #trVoice{appearance:none;-webkit-appearance:none;padding-right:24px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 13px) 13px,calc(100% - 9px) 13px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
+.paneactions{display:flex;gap:6px;pointer-events:auto;align-items:center;justify-content:flex-end;white-space:nowrap}.paneactions button,.paneactions #trVoice{height:32px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:rgba(15,20,51,.8);font-size:12px;color:var(--ink)}.paneactions #trVoice{appearance:none;-webkit-appearance:none;padding-right:24px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 13px) 13px,calc(100% - 9px) 13px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
 .transmid{display:flex;align-items:center;justify-content:center;gap:8px}
 .transmid button{height:38px;border-radius:999px;padding:0 18px;background:var(--amber);color:var(--amber-ink);font-weight:700;font-size:13px}
 .transmid button:disabled{opacity:.45}
@@ -513,7 +513,7 @@ body.chat-only .chat{padding-bottom:8px}
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
       <textarea class="transresult empty" id="trResult" maxlength="12000" rows="1" placeholder="Your translation will appear here." autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trSendVoice" hidden>Send Voice</button><button id="trCopy">Copy</button></div></div>
+      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trSendVoice" hidden>Send</button><button id="trCopy">Copy</button></div></div>
     </div>
   </div>
 </section>
