@@ -2009,6 +2009,7 @@ $("trSendVoice").onclick=async()=>{
   }catch(e){ if(e?.name!=="AbortError") toast("Could not send voice."); }
 };
 $("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").value); toast("Translation copied."); }catch{ toast("Could not copy."); } };
+let translatorAudioPlayer=null;
 $("trListen").onclick=async()=>{
   if($("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
   const btn=$("trListen");
@@ -2017,12 +2018,33 @@ $("trListen").onclick=async()=>{
   try{
     const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"})});
     if(!res.ok){ let msg="Could not generate voice."; try{const d=await res.json(); if(d.message) msg=d.message;}catch{} throw new Error(msg); }
-    const blob=await res.blob(); if($("trVoice")?.value==="henrik") translatorHenrikAudio={blob}; const url=URL.createObjectURL(blob), audio=new Audio(url);
+    const blob=await res.blob(); if($("trVoice")?.value==="henrik") translatorHenrikAudio={blob}; const url=URL.createObjectURL(blob);
+    if(!translatorAudioPlayer){
+      translatorAudioPlayer=document.createElement("audio");
+      translatorAudioPlayer.setAttribute("playsinline","");
+      translatorAudioPlayer.preload="auto";
+      translatorAudioPlayer.style.display="none";
+      document.body.appendChild(translatorAudioPlayer);
+    }
+    const audio=translatorAudioPlayer;
+    audio.pause(); audio.src=url; audio.load();
     btn.disabled=false; btn.textContent="Stop"; btn.classList.add("playing");
     const finish=()=>{ try{URL.revokeObjectURL(url);}catch{} btn.disabled=false; btn.textContent="Listen"; btn.classList.remove("playing"); if(current?.btn===btn) current=null; };
     audio.onended=finish; audio.onerror=()=>{ finish(); toast("Could not play generated voice."); };
     current={btn,stop(){ try{audio.pause(); audio.currentTime=0;}catch{} finish(); }};
-    await audio.play();
+    try{
+      await audio.play();
+    }catch(e){
+      if(e?.name==="NotAllowedError"){
+        btn.disabled=false; btn.textContent="Play";
+        btn.classList.remove("playing");
+        current={btn,stop(){ try{audio.pause(); audio.currentTime=0;}catch{} finish(); }};
+        btn.onclick=async()=>{ btn.onclick=null; btn.textContent="Stop"; btn.classList.add("playing"); try{ await audio.play(); }catch{ finish(); toast("Tap Listen again to play Henrik."); } };
+        toast("Tap Play to hear Henrik.");
+        return;
+      }
+      throw e;
+    }
   }catch(e){ btn.disabled=false; btn.textContent=original||"Listen"; btn.classList.remove("playing"); current=null; toast(e.message||"Could not play voice."); }
 };
 
