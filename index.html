@@ -2014,17 +2014,10 @@ $("trListen").onclick=async()=>{
   const btn=$("trListen");
   if(current?.btn===btn){ current.stop(); current=null; return; }
   const original=btn.textContent; btn.disabled=true; btn.textContent="Loading…";
-  const audio=new Audio();
-  audio.playsInline=true;
-  audio.muted=true;
-  audio.src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
-  const unlock=audio.play().catch(()=>{});
   try{
     const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"})});
     if(!res.ok){ let msg="Could not generate voice."; try{const d=await res.json(); if(d.message) msg=d.message;}catch{} throw new Error(msg); }
-    const blob=await res.blob(); if($("trVoice")?.value==="henrik") translatorHenrikAudio={blob}; const url=URL.createObjectURL(blob);
-    await unlock;
-    audio.pause(); audio.src=url; audio.muted=false; audio.load();
+    const blob=await res.blob(); if($("trVoice")?.value==="henrik") translatorHenrikAudio={blob}; const url=URL.createObjectURL(blob), audio=new Audio(url);
     btn.disabled=false; btn.textContent="Stop"; btn.classList.add("playing");
     const finish=()=>{ try{URL.revokeObjectURL(url);}catch{} btn.disabled=false; btn.textContent="Listen"; btn.classList.remove("playing"); if(current?.btn===btn) current=null; };
     audio.onended=finish; audio.onerror=()=>{ finish(); toast("Could not play generated voice."); };
