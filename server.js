@@ -4,6 +4,7 @@ const path = require("path");
 const os = require("os");
 const { execFile } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
+const sharp = require("sharp");
 
 const port = process.env.PORT || 3000;
 const root = __dirname;
@@ -107,7 +108,7 @@ async function handleVoiceVideo(req,res){
   let body; try{body=JSON.parse(raw||"{}");}catch{res.writeHead(400,{"Content-Type":"application/json"});return res.end(JSON.stringify({message:"Invalid JSON."}));}
   const text=String(body.text||"").trim().slice(0,12000), language=String(body.language||"");
   if(!text){res.writeHead(400,{"Content-Type":"application/json"});return res.end(JSON.stringify({message:"Missing text."}));}
-  const id=Date.now()+"-"+Math.random().toString(36).slice(2), mp3=path.join(os.tmpdir(),id+".mp3"), mp4=path.join(os.tmpdir(),id+".mp4");
+  const id=Date.now()+"-"+Math.random().toString(36).slice(2), mp3=path.join(os.tmpdir(),id+".mp3"), png=path.join(os.tmpdir(),id+".png"), mp4=path.join(os.tmpdir(),id+".mp4");
   try{
     const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/sCiXutfHwQk7QxzQ8t39?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
@@ -115,13 +116,14 @@ async function handleVoiceVideo(req,res){
     });
     if(!upstream.ok) throw new Error("Voice generation failed.");
     fs.writeFileSync(mp3,Buffer.from(await upstream.arrayBuffer()));
-    const filter="drawbox=x=0:y=0:w=1080:h=1920:color=0x07132f:t=fill,drawbox=x=190:y=660:w=700:h=600:color=0x0b1b43@0.95:t=fill,drawbox=x=500:y=790:w=80:h=170:color=0x9fc2ff:t=fill,drawbox=x=465:y=945:w=150:h=18:color=0x9fc2ff:t=fill,drawbox=x=531:y=960:w=18:h=70:color=0x9fc2ff:t=fill,drawbox=x=480:y=1025:w=120:h=16:color=0x9fc2ff:t=fill,drawbox=x=330:y=855:w=16:h=70:color=0x4e8cff:t=fill,drawbox=x=370:y=830:w=16:h=120:color=0x4e8cff:t=fill,drawbox=x=410:y=870:w=16:h=40:color=0x4e8cff:t=fill,drawbox=x=654:y=855:w=16:h=70:color=0x4e8cff:t=fill,drawbox=x=694:y=830:w=16:h=120:color=0x4e8cff:t=fill,drawbox=x=734:y=870:w=16:h=40:color=0x4e8cff:t=fill,drawtext=text='Incoming voice message':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=1090";
-    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-y","-f","lavfi","-i","color=c=0x07132f:s=1080x1920:r=30","-i",mp3,"-vf",filter,"-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",mp4],{timeout:120000},(e)=>e?reject(e):resolve()));
+    const svg=`<svg width="1080" height="1920" xmlns="http://www.w3.org/2000/svg"><rect width="1080" height="1920" fill="#07132f"/><rect x="190" y="610" width="700" height="700" rx="56" fill="#0b1b43"/><circle cx="540" cy="855" r="145" fill="#142b62"/><rect x="500" y="745" width="80" height="180" rx="40" fill="#a9c8ff"/><path d="M455 865v20c0 48 38 86 85 86s85-38 85-86v-20" fill="none" stroke="#a9c8ff" stroke-width="22" stroke-linecap="round"/><path d="M540 971v65M480 1036h120" stroke="#a9c8ff" stroke-width="22" stroke-linecap="round"/><g stroke="#5b91ff" stroke-width="18" stroke-linecap="round"><path d="M310 850v60"/><path d="M355 815v130"/><path d="M400 845v70"/><path d="M680 845v70"/><path d="M725 815v130"/><path d="M770 850v60"/></g><text x="540" y="1150" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="600">Incoming voice message</text></svg>`;
+    await sharp(Buffer.from(svg)).png().toFile(png);
+    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-y","-loop","1","-framerate","30","-i",png,"-i",mp3,"-c:v","libx264","-preset","veryfast","-tune","stillimage","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",mp4],{timeout:120000},(e)=>e?reject(e):resolve()));
     const video=fs.readFileSync(mp4);
     res.writeHead(200,{"Content-Type":"video/mp4","Content-Length":video.length,"Content-Disposition":"attachment; filename=\"incoming-voice-message.mp4\"","Cache-Control":"no-store"});
     res.end(video);
   }catch(e){res.writeHead(502,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify({message:"Could not create voice video."}));}
-  finally{try{fs.unlinkSync(mp3)}catch{} try{fs.unlinkSync(mp4)}catch{}}
+  finally{try{fs.unlinkSync(mp3)}catch{} try{fs.unlinkSync(png)}catch{} try{fs.unlinkSync(mp4)}catch{}}
 }
 
 const types = {
