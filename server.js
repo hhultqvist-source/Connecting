@@ -115,8 +115,8 @@ async function handleVoiceVideo(req,res){
     });
     if(!upstream.ok) throw new Error("Voice generation failed.");
     fs.writeFileSync(mp3,Buffer.from(await upstream.arrayBuffer()));
-    const art="drawbox=x=190:y=610:w=700:h=700:color=0x0b1b43:t=fill,drawbox=x=395:y=710:w=290:h=290:color=0x142b62:t=fill,drawbox=x=500:y=745:w=80:h=180:color=0xa9c8ff:t=fill,drawbox=x=455:y=940:w=170:h=20:color=0xa9c8ff:t=fill,drawbox=x=530:y=960:w=20:h=76:color=0xa9c8ff:t=fill,drawbox=x=480:y=1026:w=120:h=20:color=0xa9c8ff:t=fill,drawbox=x=310:y=850:w=18:h=60:color=0x5b91ff:t=fill,drawbox=x=355:y=815:w=18:h=130:color=0x5b91ff:t=fill,drawbox=x=400:y=845:w=18:h=70:color=0x5b91ff:t=fill,drawbox=x=680:y=845:w=18:h=70:color=0x5b91ff:t=fill,drawbox=x=725:y=815:w=18:h=130:color=0x5b91ff:t=fill,drawbox=x=770:y=850:w=18:h=60:color=0x5b91ff:t=fill";
-    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-y","-f","lavfi","-i","color=c=0x07132f:s=1080x1920:r=30","-i",mp3,"-vf",art,"-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",mp4],{timeout:120000},(e,stdout,stderr)=>{if(e){console.error("voice-video ffmpeg:",stderr||e.message);reject(e)}else resolve()}));
+    const artwork=path.join(root,"voice-video-bg.png");
+    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-y","-loop","1","-framerate","30","-i",artwork,"-i",mp3,"-c:v","libx264","-preset","veryfast","-tune","stillimage","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",mp4],{timeout:120000},(e,stdout,stderr)=>{if(e){console.error("voice-video ffmpeg:",stderr||e.message);reject(e)}else resolve()}));
     const video=fs.readFileSync(mp4);
     res.writeHead(200,{"Content-Type":"video/mp4","Content-Length":video.length,"Content-Disposition":"attachment; filename=\"incoming-voice-message.mp4\"","Cache-Control":"no-store"});
     res.end(video);
