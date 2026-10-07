@@ -172,7 +172,6 @@ header{padding:14px 18px 12px;border-bottom:1px solid var(--line);position:relat
 #sendBtn{background:var(--amber);color:var(--amber-ink)}
 #sendBtn:hover{background:#FFC46B}
 #sendBtn:disabled{opacity:.35}
-#trDictate.rec{background:#E5484D;color:#fff}
 #micBtn.rec{background:#E5484D;color:#fff;animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.5)}50%{box-shadow:0 0 0 8px rgba(229,72,77,0)}}
 .say.playing{box-shadow:none}
@@ -509,7 +508,7 @@ body.chat-only .chat{padding-bottom:8px}
   <div class="splittranslate">
     <div class="transpane source">
       <textarea id="trInput" maxlength="12000" rows="1" placeholder="Type or paste text…" autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trDictate" type="button" aria-label="Dictate text" aria-pressed="false">Dictate</button><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
+      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
     </div>
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
@@ -1299,113 +1298,6 @@ async function stopRecording(){
 }
 
 
-/* Shared tap-to-start/tap-to-stop dictation. Never sends a message. */
-function installDictation(){
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let active = null;
-  const chatMic = $("micBtn"), translateMic = $("trDictate");
-  function render(s, listening){
-    s.button.classList.toggle("rec", listening);
-    s.button.setAttribute("aria-pressed", String(listening));
-    s.button.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate text");
-    if(s.button === translateMic) s.button.textContent = listening ? "Stop" : "Dictate";
-    s.field.placeholder = listening ? "Listening… tap the microphone to stop" : s.placeholder;
-  }
-  function write(s){
-    const spoken = [s.finished, s.partial].filter(Boolean).join(" ").trim();
-    const prefix = s.before && spoken && !/\s$/.test(s.before) ? " " : "";
-    const suffix = s.after && spoken && !/^\s/.test(s.after) ? " " : "";
-    s.field.value = (s.before + prefix + spoken + suffix + s.after).slice(0, s.field.maxLength > 0 ? s.field.maxLength : Infinity);
-    s.field.dispatchEvent(new Event("input", {bubbles:true}));
-  }
-  function finish(s){
-    clearTimeout(s.retry); clearTimeout(s.watchdog);
-    if(active === s) active = null;
-    render(s, false);
-  }
-  function stop(immediate=false){
-    const s = active; if(!s) return;
-    s.wanted = false;
-    clearTimeout(s.retry); clearTimeout(s.watchdog);
-    render(s, false);
-    if(immediate){finish(s);try{s.rec.abort();}catch{}return;}
-    try { s.rec.stop(); } catch { finish(s); }
-    // Safari may delay its final result; keep handlers alive briefly.
-    s.watchdog = setTimeout(()=>{ try{s.rec.abort();}catch{} finish(s); }, 2000);
-  }
-  function fallback(field, message){
-    field.focus({preventScroll:true});
-    toast(message || "Use the microphone on your iPhone keyboard to dictate, or open this page in Safari.");
-  }
-  function begin(field, button, language){
-    if(active){ if(active.button === button) stop(); else toast("Stop the current dictation first."); return; }
-    if(!Recognition){ fallback(field); return; }
-    // Do not compete with an audio recording or voice playback for the mic.
-    if(session){ toast("Stop the voice recording first."); return; }
-    try{ window.speechSynthesis?.cancel(); }catch{}
-    const rec = new Recognition();
-    const position = field.selectionStart ?? field.value.length;
-    const end = field.selectionEnd ?? position;
-    const s = active = {rec,field,button,placeholder:field.placeholder,
-      before:field.value.slice(0,position), after:field.value.slice(end),
-      finished:"", partial:"", wanted:true, emptyEnds:0, started:0};
-    rec.lang = L[language]?.code || "sv-SE";
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    render(s,true);
-    function start(){
-      if(!s.wanted || active !== s) return;
-      s.started = Date.now();
-      try{ rec.start(); }
-      catch{ s.wanted=false; finish(s); fallback(field,"Dictation could not start. Allow microphone and speech access in Safari, or use your keyboard microphone."); }
-    }
-    rec.onstart = ()=>{ clearTimeout(s.watchdog); };
-    rec.onresult = event=>{
-      if(active !== s) return;
-      // Rebuild this recognition session: interim results replace each other.
-      const final = [], partial = [];
-      for(let i=0;i<event.results.length;i++){
-        const result=event.results[i];
-        (result.isFinal ? final : partial).push(result[0].transcript.trim());
-      }
-      s.partial = [...final,...partial].join(" ");
-      s.emptyEnds=0;
-      write(s);
-    };
-    rec.onerror = event=>{
-      if(event.error === "no-speech" || (event.error === "aborted" && !s.wanted)) return;
-      s.wanted=false;
-      finish(s);
-      try{rec.abort();}catch{}
-      const denied=["not-allowed","service-not-allowed","audio-capture"].includes(event.error);
-      fallback(field,denied ? "Allow microphone and speech access in Safari. If needed, enable Siri or use the keyboard microphone." : "Dictation stopped. Your text is saved; tap the microphone to try again.");
-    };
-    rec.onend = ()=>{
-      clearTimeout(s.watchdog);
-      if(!s.wanted || active !== s){ finish(s); return; }
-      // iOS can end a recognition session after a pause despite continuous=true.
-      if(s.partial){s.finished=[s.finished,s.partial].filter(Boolean).join(" ");s.partial="";}
-      else s.emptyEnds++;
-      if(s.emptyEnds>=3){s.wanted=false;finish(s);fallback(field,"Dictation could not hear you. Check your microphone or use the keyboard microphone.");return;}
-      s.retry=setTimeout(start,350);
-    };
-    s.watchdog=setTimeout(()=>{if(active===s){s.wanted=false;try{rec.abort();}catch{}finish(s);fallback(field);}},10000);
-    start();
-  }
-  chatMic.onclick=()=>begin($("input"),chatMic,$("myLang").value);
-  chatMic.setAttribute("aria-label","Dictate text");
-  translateMic.onclick=()=>begin($("trInput"),translateMic,$("trFrom").value);
-  // Manual edits, navigation and send/clear actions stop recognition first.
-  [$("input"),$("trInput")].forEach(field=>field.addEventListener("beforeinput",event=>{if(event.isTrusted && active?.field===field)stop(true);}));
-  document.addEventListener("click",event=>{
-    if(event.target.closest(".navbtn,#sendBtn,#trGo,#trClear,#trPaste,#trSwap"))stop(true);
-  },true);
-  ["myLang","trFrom"].forEach(id=>$(id).addEventListener("change",()=>stop(true)));
-  document.addEventListener("visibilitychange",()=>{if(document.hidden)stop(true);});
-  window.addEventListener("pagehide",()=>stop(true));
-}
-
 /* ---------- Message registry, reactions, reply, delete ---------- */
 const msgData = new WeakMap();
 const EMOJIS = ["👍","❤️","😂","😮","‼️","🤩","😉","🙏","🔥"];
@@ -2182,8 +2074,6 @@ applyProfileLanguagesV7();
 onlineState();
 refresh();
 console.info(`[Connecting] role=${ROLE.id} ui=${UI_LOCALE} privateAI=${CAN_USE_AI} translateTool=${CAN_TRANSLATE_TOOL}`);
-
-installDictation();
 
 addEventListener("pagehide", () => { try { if (session) stopRecording(); } catch {} try { closeCam(); } catch {} });
 </script>
