@@ -1,6 +1,9 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const { execFile } = require("child_process");
+const ffmpegPath = require("ffmpeg-static");
 
 const port = process.env.PORT || 3000;
 const root = __dirname;
@@ -97,6 +100,30 @@ async function handleTTS(req,res){
   }catch(err){ res.writeHead(502,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice service could not be reached."})); }
 }
 
+async function handleVoiceVideo(req,res){
+  const key=process.env.ELEVENLABS_API_KEY;
+  if(!key){ res.writeHead(503,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Voice service is not configured."})); }
+  let raw=""; for await(const chunk of req){ raw+=chunk; if(raw.length>256000){res.writeHead(413);return res.end();} }
+  let body; try{body=JSON.parse(raw||"{}");}catch{res.writeHead(400,{"Content-Type":"application/json"});return res.end(JSON.stringify({message:"Invalid JSON."}));}
+  const text=String(body.text||"").trim().slice(0,12000), language=String(body.language||"");
+  if(!text){res.writeHead(400,{"Content-Type":"application/json"});return res.end(JSON.stringify({message:"Missing text."}));}
+  const id=Date.now()+"-"+Math.random().toString(36).slice(2), mp3=path.join(os.tmpdir(),id+".mp3"), mp4=path.join(os.tmpdir(),id+".mp4");
+  try{
+    const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/sCiXutfHwQk7QxzQ8t39?output_format=mp3_44100_128",{
+      method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
+      body:JSON.stringify(language==="Norwegian"?{text,model_id:"eleven_flash_v2_5",language_code:"no"}:{text,model_id:"eleven_multilingual_v2"})
+    });
+    if(!upstream.ok) throw new Error("Voice generation failed.");
+    fs.writeFileSync(mp3,Buffer.from(await upstream.arrayBuffer()));
+    const filter="drawbox=x=0:y=0:w=1080:h=1920:color=0x07132f:t=fill,drawbox=x=190:y=660:w=700:h=600:color=0x0b1b43@0.95:t=fill,drawtext=text='🎙':fontcolor=white:fontsize=150:x=(w-text_w)/2:y=790,drawtext=text='Incoming voice message':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=1010";
+    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-y","-f","lavfi","-i","color=c=0x07132f:s=1080x1920:r=30","-i",mp3,"-vf",filter,"-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",mp4],{timeout:120000},(e)=>e?reject(e):resolve()));
+    const video=fs.readFileSync(mp4);
+    res.writeHead(200,{"Content-Type":"video/mp4","Content-Length":video.length,"Content-Disposition":"attachment; filename=\"incoming-voice-message.mp4\"","Cache-Control":"no-store"});
+    res.end(video);
+  }catch(e){res.writeHead(502,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify({message:"Could not create voice video."}));}
+  finally{try{fs.unlinkSync(mp3)}catch{} try{fs.unlinkSync(mp4)}catch{}}
+}
+
 const types = {
   ".html":"text/html; charset=utf-8",
   ".js":"text/javascript; charset=utf-8",
@@ -116,6 +143,9 @@ http.createServer((req,res)=>{
   }
   if (pathname === "/api/tts" && req.method === "POST") {
     return handleTTS(req,res);
+  }
+  if (pathname === "/api/voice-video" && req.method === "POST") {
+    return handleVoiceVideo(req,res);
   }
   if (pathname === "/" || pathname === "") pathname = "/index.html";
   const file = path.join(root, pathname.replace(/^\/+/, ""));
