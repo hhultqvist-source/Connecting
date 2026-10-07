@@ -1998,15 +1998,24 @@ const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henri
 $("trVoice").addEventListener("change",syncTranslatorVoiceActions);
 syncTranslatorVoiceActions();
 $("trSendVoice").onclick=async()=>{
-  if($("trVoice")?.value!=="henrik" || !translatorHenrikAudio?.blob) return toast("Listen with Henrik first.");
-  const file=new File([translatorHenrikAudio.blob],"Henrik-voice.mp3",{type:translatorHenrikAudio.blob.type||"audio/mpeg"});
+  if($("trVoice")?.value!=="henrik" || $("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
+  const btn=$("trSendVoice"), original=btn.textContent; btn.disabled=true; btn.textContent="Creating…";
   try{
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({files:[file]});
-    }else{
-      toast("Voice sharing is not supported on this device.");
-    }
-  }catch(e){ if(e?.name!=="AbortError") toast("Could not send voice."); }
+    const res=await fetch("/api/voice-video",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value})});
+    if(!res.ok){let msg="Could not create voice video.";try{const d=await res.json();if(d.message)msg=d.message}catch{}throw new Error(msg)}
+    const blob=await res.blob(), file=new File([blob],"incoming-voice-message.mp4",{type:"video/mp4"}), url=URL.createObjectURL(blob);
+    const preview=document.createElement("div");
+    preview.style.cssText="position:fixed;inset:0;z-index:9999;background:#030711;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px";
+    const video=document.createElement("video"); video.src=url; video.controls=true; video.playsInline=true; video.style.cssText="width:min(72vw,360px);max-height:70vh;border-radius:22px;background:#07132f";
+    const actions=document.createElement("div"); actions.style.cssText="display:flex;gap:12px";
+    const close=document.createElement("button"); close.textContent="Cancel"; close.className="btn ghost";
+    const share=document.createElement("button"); share.textContent="Share"; share.className="btn primary";
+    actions.append(close,share); preview.append(video,actions); document.body.appendChild(preview);
+    const cleanup=()=>{try{video.pause();URL.revokeObjectURL(url)}catch{} preview.remove()};
+    close.onclick=cleanup;
+    share.onclick=async()=>{try{if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:"Incoming voice message"});}else{const a=document.createElement("a");a.href=url;a.download=file.name;a.click();}}catch(e){if(e?.name!=="AbortError")toast("Could not open sharing.");}};
+  }catch(e){toast(e.message||"Could not create voice video.");}
+  finally{btn.disabled=false;btn.textContent=original||"Send";}
 };
 $("trCopy").onclick=async()=>{ if($("trResult").classList.contains("empty")) return; try{ await navigator.clipboard.writeText($("trResult").value); toast("Translation copied."); }catch{ toast("Could not copy."); } };
 let translatorAudioPlayer=null;
