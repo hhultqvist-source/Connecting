@@ -2026,7 +2026,7 @@ let translatorAudioPlayer=null;
 $("trListen").onclick=async()=>{
   if($("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
   const btn=$("trListen");
-  if(current?.btn===btn){ current.stop(); current=null; return; }
+  if(current?.btn===btn){ if(current.resume) await current.resume(); else {current.stop(); current=null;} return; }
   const original=btn.textContent; btn.disabled=true; btn.textContent="Loading…";
   try{
     const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"})});
@@ -2051,8 +2051,18 @@ $("trListen").onclick=async()=>{
       if(e?.name==="NotAllowedError"){
         btn.disabled=false; btn.textContent="Play";
         btn.classList.remove("playing");
-        current={btn,stop(){ try{audio.pause(); audio.currentTime=0;}catch{} finish(); }};
-        btn.onclick=async()=>{ btn.onclick=null; btn.textContent="Stop"; btn.classList.add("playing"); try{ await audio.play(); }catch{ finish(); toast("Tap Listen again to play Henrik."); } };
+        // Keep the Listen handler permanently installed; retry cached audio
+        // directly inside the next user tap to satisfy Safari playback policy.
+        current={btn,stop(){ try{audio.pause(); audio.currentTime=0;}catch{} finish(); },async resume(){
+          btn.textContent="Stop"; btn.classList.add("playing");
+          try{
+            await audio.play();
+            if(current?.btn===btn) delete current.resume;
+          }catch{
+            btn.textContent="Play"; btn.classList.remove("playing");
+            toast("Tap Play to hear the generated voice.");
+          }
+        }};
         toast("Tap Play to hear Henrik.");
         return;
       }
