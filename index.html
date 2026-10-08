@@ -687,7 +687,7 @@ const t = (key, vars={}) => {
 const TONES = [
   ["formal","Formal","formal"],["friendly","Friendly","warm and friendly"],["short","Short","very short and concise"],
   ["professional","Professional","professional"],["legal","Legal","formal legal"],
-  ["romantic","Romantic","romantic"],["flirty","Flirty","flirty and playful"],["seducing","Seducing","confident, teasing and seductive"],["narrative","Narrative","narrative and storytelling"]
+  ["romantic","Romantic","romantic"],["flirt","Flirt","playful, confident and subtly seductive"],["narrative","Storytelling","natural narrative and storytelling"]
 ];
 
 const state = { speaker:"me", tone:"", history:[], drafts:{ me:"" }, viewerRole:ROLE.id };
@@ -740,6 +740,7 @@ let prefs = {};
 try { prefs = JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch {}
 $("myLang").value = L[prefs.my] ? prefs.my : "Swedish";
 $("theirLang").value = L[prefs.their] ? prefs.their : "English";
+if (["flirty","seducing"].includes(prefs.tone)) prefs.tone = "flirt";
 if (prefs.tone && TONES.some(x => x[0] === prefs.tone)) state.tone = prefs.tone;
 
 if (CAN_USE_AI) {
@@ -1390,8 +1391,7 @@ function aiToneInstruction(){
     formal:"Selected tone: Formal. The finished text MUST use a clearly formal, composed style without sounding robotic. NEVER use emojis, emoticons or decorative symbols.",
     legal:"Selected tone: Legal. The finished text MUST be precise, careful and legally neutral; never invent legal claims. NEVER use emojis, emoticons or decorative symbols.",
     romantic:"Selected tone: Romantic. The finished text MUST feel warm and affectionate without clichés.",
-    flirty:"Selected tone: Flirty. The finished text MUST feel subtly playful and flirty without overdoing it.",
-    seducing:`Selected tone: Seducing. Write with calm confidence, restrained attraction, playful tension and genuine curiosity. It should feel personal and spontaneous, never needy, crude, pushy, manipulative or like a pickup-line generator. Prefer short, natural lines that notice the other person's presence or effect on the user, create a little mystery, or invite them to open up. Use the following lines only as STYLE REFERENCES and inspiration; adapt them to the actual conversation instead of copying mechanically:
+    flirt:`Selected tone: Flirt. Combine subtle playful flirting with calm confidence, restrained attraction, playful tension and genuine curiosity. It should feel personal and spontaneous, never needy, crude, pushy, manipulative or like a pickup-line generator. Prefer short, natural lines that notice the other person's presence or effect on the user, create a little mystery, or invite them to open up. Use the following lines only as STYLE REFERENCES and inspiration; adapt them to the actual conversation instead of copying mechanically:
 - "Top of the morning to you!"
 - "You seem like someone who leaves an impression without trying."
 - "There's a calm confidence about you that I like."
@@ -1428,7 +1428,7 @@ Additional Claude-researched STYLE REFERENCES (original synthesized examples, no
 - "I'm enjoying this too much to keep it all on text. Want to put a face to the banter?"
 Research-derived style rules: be specific rather than generic; tease behavior rather than the person; leave a little unsaid; match the other person's energy and pace; read the line aloud so it sounds natural; end with an easy opening rather than pressure.
 Keep it tasteful and context-aware. Emojis are optional and should be sparse, never automatic.`,
-    narrative:"Selected tone: Narrative. The finished text MUST have a natural storytelling flow without inventing facts."
+    narrative:"Selected tone: Storytelling. Write with a natural narrative flow, clear progression and a conversational rhythm. Use concrete details supplied by the user to make the account engaging and personal. Preserve the facts and meaning; never invent events, dialogue, memories or details. Keep the length appropriate to the request and avoid melodrama or an artificial literary style."
   };
   return map[state.tone] || "Selected tone: Natural. Write naturally in the user's own voice.";
 }
