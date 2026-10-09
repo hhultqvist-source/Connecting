@@ -1988,6 +1988,7 @@ $("trGo").onclick=async()=>{
     const out=await translatePlain(text,from,to);
     $("trResult").value=out; $("trResult").classList.remove("empty");
     $("trResultLang").textContent=FLAG[to]||"🌐";
+    if(window.saveTranslationToArchive) void window.saveTranslationToArchive({source_text:text,translated_text:out,source_language:from,target_language:to}).catch(error=>console.warn("[Connecting] archive unavailable",error));
   }
   catch(e){ $("trResult").value=""; $("trResult").classList.add("empty"); toast("Could not translate: "+e.message); }
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
@@ -2461,5 +2462,159 @@ async function rtcInit(){
 rtcInit();
 </script>
 
+
+<!-- Personal translations: automatic saving, opened from Online -->
+<style>
+#onlineInline[role="button"]{cursor:pointer;min-height:36px}
+#translationArchive{position:fixed;inset:0;z-index:1500;display:flex;flex-direction:column;background:var(--night);padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);backface-visibility:hidden;-webkit-backface-visibility:hidden;transform-origin:center;animation:archiveFlipIn .55s ease both;overflow:hidden}
+#translationArchive.archive-closing{animation:archiveFlipOut .55s ease both}
+@keyframes archiveFlipIn{from{transform:perspective(1200px) rotateY(-180deg)}to{transform:perspective(1200px) rotateY(0)}}
+@keyframes archiveFlipOut{from{transform:perspective(1200px) rotateY(0)}to{transform:perspective(1200px) rotateY(180deg)}}
+.archive-head{display:flex;align-items:center;gap:12px;padding:18px;border-bottom:1px solid var(--line);flex-shrink:0}
+.archive-head h2{font-family:var(--serif);font-size:26px;font-weight:500}
+.archive-head p{font-size:12px;color:var(--mute);margin-top:5px}
+.archive-scroll{overflow-y:auto;overscroll-behavior:contain;flex:1;padding:18px;min-height:0}
+#archiveList{display:grid;gap:10px;max-width:760px;margin:auto}
+.archive-entry{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:16px;overflow:hidden}
+.archive-entry summary{cursor:pointer;list-style:none;padding:16px}
+.archive-entry summary::-webkit-details-marker{display:none}
+.archive-meta{display:flex;justify-content:space-between;gap:12px;color:var(--mute);font-size:11px;flex-wrap:wrap}
+.archive-preview{margin-top:9px;font-size:14px;line-height:1.5;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.archive-content{padding:0 16px 16px}
+.archive-content h3{font-size:12px;color:var(--fjord);margin:16px 0 7px}
+.archive-content p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.6;user-select:text}
+.archive-actions{display:flex;gap:16px;margin-top:18px}
+.archive-actions button{color:var(--fjord);font-size:12px;padding:8px 0}
+.archive-empty{text-align:center;color:var(--mute);font-size:14px;line-height:1.7;padding:48px 16px}
+@media(prefers-reduced-motion:reduce){#translationArchive,#translationArchive.archive-closing{animation-duration:.01s}}
+</style>
+<section id="translationArchive" hidden role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
+ <div class="archive-head"><button class="iconbtn" id="archiveClose" aria-label="Back to Connecting">←</button><div><h2 id="archiveTitle">My translations</h2><p id="archiveStatus" role="status">New translations are saved automatically.</p></div></div>
+ <div class="archive-scroll"><div id="archiveList"></div></div>
+</section>
+<script>
+(() => {
+ if (!IS_OWNER) return;
+ const panel=$("translationArchive"),status=$("archiveStatus"),list=$("archiveList"),trigger=$("onlineInline");
+ trigger.setAttribute("role","button");trigger.tabIndex=0;
+ trigger.setAttribute("aria-label","Open My translations");trigger.setAttribute("aria-haspopup","dialog");trigger.setAttribute("aria-expanded","false");
+ let dbPromise,syncing=null,previousFocus=null,background=[],closingTimer=null,remoteRequested=false;
+ const ownerId=()=>RTC.profile?.role_code==="A"?RTC.user?.id:null;
+ const allowed=()=>!RTC.profile||RTC.profile.role_code==="A";
+ const visible=rows=>rows.filter(row=>row.owner_key==="device"||(ownerId()&&row.owner_key===ownerId()));
+ function db(){
+  return dbPromise||(dbPromise=new Promise((resolve,reject)=>{
+   const request=indexedDB.open("connecting-translation-archive",1);
+   request.onupgradeneeded=()=>request.result.createObjectStore("translations",{keyPath:"id"});
+   request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+   request.onblocked=()=>reject(new Error("Storage is busy"));
+  }).catch(error=>{dbPromise=null;throw error;}));
+ }
+ async function rows(){
+  const database=await db();
+  return new Promise((resolve,reject)=>{
+   const tx=database.transaction("translations","readonly"),request=tx.objectStore("translations").getAll();
+   request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+  });
+ }
+ async function put(items){
+  if(!items.length)return;
+  const database=await db();
+  return new Promise((resolve,reject)=>{
+   const tx=database.transaction("translations","readwrite");items.forEach(item=>tx.objectStore("translations").put(item));
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error("Storage unavailable"));
+  });
+ }
+ function el(tag,cls,text){
+  const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;
+ }
+ async function render(){
+  try{
+   if(!allowed())return;
+   const items=visible(await rows()).sort((a,b)=>b.created_at.localeCompare(a.created_at)||b.id.localeCompare(a.id));
+   const expanded=new Set([...list.querySelectorAll("details[open]")].map(node=>node.dataset.id));
+   list.replaceChildren();
+   status.textContent=items.some(row=>!row.synced)?ownerId()?"Saved on this device · waiting for cloud sync":"Saved automatically on this device":items.length?"Saved automatically · synced to your account":"New translations are saved automatically.";
+   if(!items.length){list.append(el("p","archive-empty","Your next translation will appear here automatically."));return;}
+   for(const row of items){
+    const details=el("details","archive-entry");details.dataset.id=row.id;details.open=expanded.has(row.id);
+    const summary=el("summary"),meta=el("div","archive-meta");
+    meta.append(el("span",null,(FLAG[row.source_language]||"🌐")+" "+row.source_language+" → "+(FLAG[row.target_language]||"🌐")+" "+row.target_language),el("time",null,new Date(row.created_at).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})));
+    summary.append(meta,el("div","archive-preview",row.translated_text));
+    const content=el("div","archive-content");
+    content.append(el("h3",null,"Original · "+row.source_language),el("p",null,row.source_text),el("h3",null,"Translation · "+row.target_language),el("p",null,row.translated_text));
+    const actions=el("div","archive-actions"),copy=el("button",null,"Copy translation"),download=el("button",null,"Download text");
+    copy.onclick=async()=>{try{await navigator.clipboard.writeText(row.translated_text);toast("Translation copied");}catch{toast("Select the text to copy it.");}};
+    download.onclick=()=>{
+     const blob=new Blob([row.source_language+" → "+row.target_language+"\n"+new Date(row.created_at).toLocaleString()+"\n\nOriginal\n"+row.source_text+"\n\nTranslation\n"+row.translated_text],{type:"text/plain;charset=utf-8"});
+     const url=URL.createObjectURL(blob),anchor=document.createElement("a");
+     anchor.href=url;anchor.download="translation-"+row.created_at.slice(0,10)+"-"+row.id.slice(0,8)+".txt";
+     document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+    };
+    actions.append(copy,download);content.append(actions);details.append(summary,content);list.append(details);
+   }
+  }catch(error){status.textContent="Could not open saved translations on this device.";list.replaceChildren(el("p","archive-empty","Please try opening My translations again."));console.warn("[Connecting] archive storage",error);}
+ }
+ async function sync(fetchRemote=false){
+  remoteRequested=remoteRequested||fetchRemote;
+  if(syncing)return syncing;
+  const owner=ownerId();if(!owner||!RTC.sb||!navigator.onLine)return;
+  syncing=(async()=>{
+   let changed=false;
+   try{
+    for(const row of visible(await rows()).filter(row=>!row.synced)){
+     const payload={id:row.id,user_id:owner,source_language:row.source_language,target_language:row.target_language,source_text:row.source_text,translated_text:row.translated_text,created_at:row.created_at};
+     const {error}=await RTC.sb.from("connecting_translation_archive").insert(payload);
+     if(error&&error.code!=="23505")throw error;
+     await put([{...row,owner_key:owner,synced:true}]);changed=true;
+    }
+    if(remoteRequested&&!panel.hidden){
+     remoteRequested=false;let page=0,data;
+     do{
+      const result=await RTC.sb.from("connecting_translation_archive").select("*").eq("user_id",owner).order("created_at",{ascending:false}).order("id",{ascending:false}).range(page*100,page*100+99);
+      if(result.error)throw result.error;
+      data=result.data||[];await put(data.map(({user_id,...row})=>({...row,owner_key:owner,synced:true})));page++;
+     }while(data.length===100);
+     changed=true;
+    }
+   }catch(error){console.warn("[Connecting] archive sync deferred",error);}
+   finally{syncing=null;if(changed&&!panel.hidden)await render();}
+  })();
+  return syncing;
+ }
+ window.saveTranslationToArchive=async payload=>{
+  if(!allowed())return;
+  try{
+   await put([{...payload,id:crypto.randomUUID(),created_at:new Date().toISOString(),owner_key:ownerId()||"device",synced:false}]);
+   if(!panel.hidden)await render();void sync();
+  }catch(error){console.warn("[Connecting] translation archive save",error);toast("Translation ready, but automatic saving failed on this device.");}
+ };
+ function open(){
+  if(!allowed()||!panel.hidden)return;
+  clearTimeout(closingTimer);panel.classList.remove("archive-closing");previousFocus=document.activeElement;
+  background=[...document.body.children].filter(node=>node!==panel&&!["STYLE","SCRIPT"].includes(node.tagName)).map(node=>({node,inert:node.inert}));
+  background.forEach(({node})=>node.inert=true);panel.hidden=false;trigger.setAttribute("aria-expanded","true");$("archiveClose").focus();
+  void render();void sync(true);
+ }
+ function close(){
+  if(panel.hidden||panel.classList.contains("archive-closing"))return;
+  panel.classList.add("archive-closing");trigger.setAttribute("aria-expanded","false");
+  closingTimer=setTimeout(()=>{
+   panel.hidden=true;panel.classList.remove("archive-closing");background.forEach(({node,inert})=>node.inert=inert);background=[];
+   (previousFocus?.isConnected?previousFocus:trigger).focus();
+  },matchMedia("(prefers-reduced-motion: reduce)").matches?20:560);
+ }
+ trigger.addEventListener("click",open);trigger.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();open();}});
+ $("archiveClose").onclick=close;
+ panel.addEventListener("keydown",event=>{
+  if(event.key==="Escape"){event.preventDefault();close();}
+  if(event.key!=="Tab")return;
+  const nodes=[...panel.querySelectorAll("button,summary")].filter(node=>node.getClientRects().length),first=nodes[0],last=nodes[nodes.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+ });
+ window.addEventListener("online",()=>void sync());setInterval(()=>void sync(),30000);setTimeout(()=>void sync(),2000);
+})();
+</script>
 </body>
 </html>
