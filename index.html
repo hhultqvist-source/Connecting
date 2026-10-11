@@ -1994,15 +1994,25 @@ $("trGo").onclick=async()=>{
   finally{ btn.disabled=false; btn.textContent=t("translateAction"); }
 };
 $("trResult").addEventListener("input",()=>{ $("trResult").classList.toggle("empty",!$("trResult").value.trim()); });
-let translatorHenrikAudio=null;
-const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henrik"; $("trSendVoice").hidden=!henrik; $("trVideoVoice").hidden=!henrik; if(!henrik) translatorHenrikAudio=null; };
+let translatorVoiceAudio=null;
+const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henrik", norwegian=$("trTo").value==="Norwegian" && $("trVoice")?.value==="standard"; $("trSendVoice").hidden=!(henrik||norwegian); $("trVideoVoice").hidden=!henrik; };
 $("trVoice").addEventListener("change",syncTranslatorVoiceActions);
+$("trTo").addEventListener("change",syncTranslatorVoiceActions);
+$("trSwap").addEventListener("click",syncTranslatorVoiceActions);
 syncTranslatorVoiceActions();
 $("trSendVoice").onclick=async()=>{
-  if($("trVoice")?.value!=="henrik" || !translatorHenrikAudio?.blob) return toast("Listen with Henrik first.");
-  const file=new File([translatorHenrikAudio.blob],"Henrik-voice.mp3",{type:translatorHenrikAudio.blob.type||"audio/mpeg"});
-  try{if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))) await navigator.share({files:[file]}); else toast("Voice sharing is not supported on this device.");}
-  catch(e){if(e?.name!=="AbortError")toast("Could not send voice.");}
+  const text=$("trResult").value.trim(), language=$("trTo").value, voice=$("trVoice")?.value||"standard";
+  if(!text || $("trResult").classList.contains("empty")) return;
+  if(!translatorHenrikAudio?.blob || translatorHenrikAudio.text!==text || translatorHenrikAudio.language!==language || translatorHenrikAudio.voice!==voice) return toast("Listen first to prepare this audio file.");
+  const file=new File([translatorHenrikAudio.blob],voice==="henrik"?"Henrik-voice.mp3":"Norwegian-translation.mp3",{type:translatorHenrikAudio.blob.type||"audio/mpeg"});
+  try{
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))) await navigator.share({files:[file]});
+    else{
+      const url=URL.createObjectURL(file), link=document.createElement("a");
+      link.href=url; link.download=file.name; document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),10000);
+    }
+  }catch(e){if(e?.name!=="AbortError")toast("Could not send voice.");}
 };
 $("trVideoVoice").onclick=async()=>{
   if($("trVoice")?.value!=="henrik" || $("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
@@ -2030,9 +2040,10 @@ $("trListen").onclick=async()=>{
   if(current?.btn===btn){ if(current.resume) await current.resume(); else {current.stop(); current=null;} return; }
   const original=btn.textContent; btn.disabled=true; btn.textContent="Loading…";
   try{
-    const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"})});
+    const voiceRequest={text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"};
+    const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(voiceRequest)});
     if(!res.ok){ let msg="Could not generate voice."; try{const d=await res.json(); if(d.message) msg=d.message;}catch{} throw new Error(msg); }
-    const blob=await res.blob(); if($("trVoice")?.value==="henrik") translatorHenrikAudio={blob}; const url=URL.createObjectURL(blob);
+    const blob=await res.blob(); translatorHenrikAudio={blob,...voiceRequest}; const url=URL.createObjectURL(blob);
     if(!translatorAudioPlayer){
       translatorAudioPlayer=document.createElement("audio");
       translatorAudioPlayer.setAttribute("playsinline","");
@@ -2078,6 +2089,7 @@ configureRoleLanguageSettings();
 $("profileBtn").onclick=()=>$("settingsBtn").click();
 
 if (CAN_TRANSLATE_TOOL) fillTranslateLanguages();
+syncTranslatorVoiceActions();
 applyRoleUi();
 applyProfileLanguagesV7();
 
