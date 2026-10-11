@@ -2003,8 +2003,8 @@ syncTranslatorVoiceActions();
 $("trSendVoice").onclick=async()=>{
   const text=$("trResult").value.trim(), language=$("trTo").value, voice=$("trVoice")?.value||"standard";
   if(!text || $("trResult").classList.contains("empty")) return;
-  if(!translatorHenrikAudio?.blob || translatorHenrikAudio.text!==text || translatorHenrikAudio.language!==language || translatorHenrikAudio.voice!==voice) return toast("Listen first to prepare this audio file.");
-  const file=new File([translatorHenrikAudio.blob],voice==="henrik"?"Henrik-voice.mp3":"Norwegian-translation.mp3",{type:translatorHenrikAudio.blob.type||"audio/mpeg"});
+  if(!translatorVoiceAudio?.blob || translatorVoiceAudio.text!==text || translatorVoiceAudio.language!==language || translatorVoiceAudio.voice!==voice) return toast("Listen first to prepare this audio file.");
+  const file=new File([translatorVoiceAudio.blob],voice==="henrik"?"Henrik-voice.mp3":"Norwegian-translation.mp3",{type:translatorVoiceAudio.blob.type||"audio/mpeg"});
   try{
     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))) await navigator.share({files:[file]});
     else{
@@ -2043,7 +2043,7 @@ $("trListen").onclick=async()=>{
     const voiceRequest={text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice")?.value||"standard"};
     const res=await fetch("/api/tts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(voiceRequest)});
     if(!res.ok){ let msg="Could not generate voice."; try{const d=await res.json(); if(d.message) msg=d.message;}catch{} throw new Error(msg); }
-    const blob=await res.blob(); translatorHenrikAudio={blob,...voiceRequest}; const url=URL.createObjectURL(blob);
+    const blob=await res.blob(); translatorVoiceAudio={blob,...voiceRequest}; const url=URL.createObjectURL(blob);
     if(!translatorAudioPlayer){
       translatorAudioPlayer=document.createElement("audio");
       translatorAudioPlayer.setAttribute("playsinline","");
