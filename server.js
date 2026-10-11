@@ -88,7 +88,7 @@ async function handleTTS(req,res){
   if(!text){ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Missing text."})); }
   // ElevenLabs' multilingual model speaks the supplied target-language text directly.
   const requestedVoice=String(body.voice||"standard");
-  const voiceId=requestedVoice==="henrik" ? "sCiXutfHwQk7QxzQ8t39" : (process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb");
+  const voiceId=requestedVoice==="henrik" ? "sCiXutfHwQk7QxzQ8t39" : language==="Norwegian" ? "SUVXSJC7hh41K4FtAVuH" : (process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb");
   try{
     const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
