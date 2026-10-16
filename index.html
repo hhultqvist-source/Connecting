@@ -1995,7 +1995,7 @@ $("trGo").onclick=async()=>{
 };
 $("trResult").addEventListener("input",()=>{ $("trResult").classList.toggle("empty",!$("trResult").value.trim()); });
 let translatorVoiceAudio=null;
-const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henrik", norwegian=$("trTo").value==="Norwegian" && $("trVoice")?.value==="standard"; $("trSendVoice").hidden=!(henrik||norwegian); $("trVideoVoice").hidden=!henrik; };
+const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henrik"; $("trSendVoice").hidden=false; $("trVideoVoice").hidden=!henrik; };
 $("trVoice").addEventListener("change",syncTranslatorVoiceActions);
 $("trTo").addEventListener("change",syncTranslatorVoiceActions);
 $("trSwap").addEventListener("click",syncTranslatorVoiceActions);
@@ -2004,7 +2004,7 @@ $("trSendVoice").onclick=async()=>{
   const text=$("trResult").value.trim(), language=$("trTo").value, voice=$("trVoice")?.value||"standard";
   if(!text || $("trResult").classList.contains("empty")) return;
   if(!translatorVoiceAudio?.blob || translatorVoiceAudio.text!==text || translatorVoiceAudio.language!==language || translatorVoiceAudio.voice!==voice) return toast("Listen first to prepare this audio file.");
-  const file=new File([translatorVoiceAudio.blob],voice==="henrik"?"Henrik-voice.mp3":"Norwegian-translation.mp3",{type:translatorVoiceAudio.blob.type||"audio/mpeg"});
+  const file=new File([translatorVoiceAudio.blob],voice==="henrik"?"Henrik-"+language+"-voice.mp3":language+"-translation.mp3",{type:translatorVoiceAudio.blob.type||"audio/mpeg"});
   try{
     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))) await navigator.share({files:[file]});
     else{
