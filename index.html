@@ -2037,8 +2037,37 @@ $("trVideoVoice").onclick=async()=>{
     const close=document.createElement("button"); close.textContent="Cancel"; close.className="btn ghost";
     const share=document.createElement("button"); share.textContent="Share"; share.className="btn primary";
     actions.append(close,share); preview.append(video,actions); document.body.appendChild(preview);
-    const cleanup=()=>{try{video.pause();URL.revokeObjectURL(url)}catch{} preview.remove()}; close.onclick=cleanup;
-    share.onclick=async()=>{try{if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))) await navigator.share({files:[file],title:"Incoming voice message"}); else{const a=document.createElement("a");a.href=url;a.download=file.name;a.click();}}catch(e){if(e?.name!=="AbortError")toast("Could not open sharing.");}};
+    let closed=false, sharing=false;
+    const cleanup=()=>{
+      if(closed) return;
+      closed=true;
+      try{video.pause();video.removeAttribute("src");video.load();}catch{}
+      preview.remove();
+      // Allow Safari downloads and share targets time to consume the file.
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+      btn.focus();
+    };
+    close.onclick=cleanup;
+    share.onclick=async()=>{
+      if(sharing) return;
+      sharing=true;
+      try{
+        const canShare=navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}));
+        if(canShare){
+          // Close the media layer before iOS hands control to another app.
+          // Do not await anything before share: Safari needs this user gesture.
+          cleanup();
+          await navigator.share({files:[file]});
+        }else{
+          const a=document.createElement("a");a.href=url;a.download=file.name;
+          document.body.appendChild(a);a.click();a.remove();cleanup();
+          toast("Video downloaded. Save it to Photos to open it in Snapchat.");
+        }
+      }catch(e){
+        cleanup();
+        if(e?.name!=="AbortError") toast("Could not share video. Try again or save the video first.");
+      }finally{sharing=false;}
+    };
   }catch(e){toast(e.message||"Could not create voice video.");}
   finally{btn.disabled=false;btn.textContent=original||"Video";}
 };
