@@ -79,7 +79,7 @@ async function handleClaude(req,res){
 
 function elevenVoiceId(language,voice){
   if(voice==="henrik") return "sCiXutfHwQk7QxzQ8t39";
-  if(language==="Norwegian") return "SUVXSJC7hh41K4FtAVuH";
+  if(language==="Norwegian") return "i4PEHCSo27zMoz3IwmXu";
   return process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
 }
 
