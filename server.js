@@ -130,7 +130,9 @@ async function handleVoiceVideo(req,res){
       if(e || !match) return reject(e || new Error("Could not read voice duration."));
       resolve(String(Number(match[1])*3600+Number(match[2])*60+Number(match[3])));
     }));
-    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-hide_banner","-loglevel","error","-nostats","-y","-threads","1","-loop","1","-framerate","1","-i",artwork,"-i",mp3,"-filter_threads","1","-c:v","libx264","-threads","2","-preset","veryfast","-tune","stillimage","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",duration,"-shortest","-movflags","+faststart",mp4],{timeout:120000,maxBuffer:1024*1024},(e,stdout,stderr)=>{if(e){console.error("voice-video ffmpeg:",stderr||e.message);reject(e)}else resolve()}));
+    // Keep the image track at least as long as the complete audio, including encoder padding.
+    const videoDuration=String(Math.ceil(Number(duration)+0.05));
+    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-hide_banner","-loglevel","error","-nostats","-y","-threads","1","-loop","1","-framerate","1","-i",artwork,"-i",mp3,"-filter_threads","1","-c:v","libx264","-threads","2","-preset","veryfast","-tune","stillimage","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",videoDuration,"-movflags","+faststart",mp4],{timeout:120000,maxBuffer:1024*1024},(e,stdout,stderr)=>{if(e){console.error("voice-video ffmpeg:",stderr||e.message);reject(e)}else resolve()}));
     const video=fs.readFileSync(mp4);
     res.writeHead(200,{"Content-Type":"video/mp4","Content-Length":video.length,"Content-Disposition":"attachment; filename=\"incoming-voice-message.mp4\"","Cache-Control":"no-store"});
     res.end(video);
