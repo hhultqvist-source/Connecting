@@ -77,6 +77,12 @@ async function handleClaude(req,res){
 
 
 
+function elevenVoiceId(language,voice){
+  if(voice==="henrik") return "sCiXutfHwQk7QxzQ8t39";
+  if(language==="Norwegian") return "SUVXSJC7hh41K4FtAVuH";
+  return process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
+}
+
 async function handleTTS(req,res){
   const key=process.env.ELEVENLABS_API_KEY;
   if(!key){ res.writeHead(503,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice service is not configured."})); }
@@ -88,7 +94,7 @@ async function handleTTS(req,res){
   if(!text){ res.writeHead(400,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Missing text."})); }
   // ElevenLabs' multilingual model speaks the supplied target-language text directly.
   const requestedVoice=String(body.voice||"standard");
-  const voiceId=requestedVoice==="henrik" ? "sCiXutfHwQk7QxzQ8t39" : language==="Norwegian" ? "SUVXSJC7hh41K4FtAVuH" : (process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb");
+  const voiceId=elevenVoiceId(language,requestedVoice);
   try{
     const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
@@ -109,7 +115,8 @@ async function handleVoiceVideo(req,res){
   if(!text){res.writeHead(400,{"Content-Type":"application/json"});return res.end(JSON.stringify({message:"Missing text."}));}
   const id=Date.now()+"-"+Math.random().toString(36).slice(2), mp3=path.join(os.tmpdir(),id+".mp3"), mp4=path.join(os.tmpdir(),id+".mp4");
   try{
-    const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/sCiXutfHwQk7QxzQ8t39?output_format=mp3_44100_128",{
+    const voiceId=elevenVoiceId(language,String(body.voice||"henrik"));
+    const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
       body:JSON.stringify(language==="Norwegian"?{text,model_id:"eleven_flash_v2_5",language_code:"no"}:{text,model_id:"eleven_multilingual_v2"})
     });

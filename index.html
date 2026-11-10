@@ -341,6 +341,12 @@ body.composer-expanded-active #empty{display:none!important}
 .transresult{white-space:pre-wrap;overflow-wrap:anywhere}.transresult.empty{color:var(--mute)}
 .panefoot{position:absolute;left:12px;right:12px;bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;pointer-events:none}
 .panefoot .count{font-size:11px;color:var(--mute)}
+.splittranslate:has(#trResult.empty) #trUseResult{display:none}
+@media(max-width:380px){
+  #translateView .transpane.result .paneactions{gap:4px}
+  #translateView .transpane.result .paneactions button{padding-inline:5px}
+  #translateView .transpane.result #trVoice{padding-left:6px}
+}
 .paneactions{display:flex;gap:6px;pointer-events:auto;align-items:center;justify-content:flex-end;white-space:nowrap}.paneactions button,.paneactions #trVoice{height:32px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:rgba(15,20,51,.8);font-size:12px;color:var(--ink)}.paneactions #trVoice{appearance:none;-webkit-appearance:none;padding-right:24px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 13px) 13px,calc(100% - 9px) 13px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
 .transmid{display:flex;align-items:center;justify-content:center;gap:8px}
 .transmid button{height:38px;border-radius:999px;padding:0 18px;background:var(--amber);color:var(--amber-ink);font-weight:700;font-size:13px}
@@ -508,12 +514,12 @@ body.chat-only .chat{padding-bottom:8px}
   <div class="splittranslate">
     <div class="transpane source">
       <textarea id="trInput" maxlength="12000" rows="1" placeholder="Type or paste text…" autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
+      <div class="panefoot"><span class="count" id="trCount">0</span><div class="paneactions"><button id="trUseResult" type="button" title="Use the translation as source text">↑ Use result</button><button id="trPaste">Paste</button><button id="trClear">Clear</button></div></div>
     </div>
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
       <textarea class="transresult empty" id="trResult" maxlength="12000" rows="1" placeholder="Your translation will appear here." autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trSendVoice" hidden>Send</button><button id="trVideoVoice" hidden>Video</button><button id="trCopy">Copy</button></div></div>
+      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trSendVoice">Send</button><button id="trVideoVoice">Video</button><button id="trCopy">Copy</button></div></div>
     </div>
   </div>
 </section>
@@ -1965,6 +1971,13 @@ function translateLanguageChanged(){
 }
 $("trFrom").onchange=translateLanguageChanged; $("trTo").onchange=translateLanguageChanged;
 $("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.value; $("trCount").textContent=$("trInput").value.length; r.value=""; r.classList.add("empty"); } };
+$("trUseResult").onclick=()=>{
+  if($("trGo").disabled || $("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
+  $("trSwap").click();
+  $("trInput").scrollTop=0;
+  $("trTo").focus();
+  toast("Choose a new target language.");
+};
 $("trInput").addEventListener("input",()=>{$("trCount").textContent=$("trInput").value.length;});
 $("trClear").onclick=()=>{$("trInput").value=""; $("trCount").textContent="0"; $("trResult").value=""; $("trResult").classList.add("empty"); $("trInput").focus();};
 $("trPaste").onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ $("trInput").value=t.slice(0,12000); $("trCount").textContent=$("trInput").value.length; $("trInput").focus(); } }catch{ toast("Tillåt åtkomst till urklipp, eller klistra in manuellt."); } };
@@ -1995,11 +2008,6 @@ $("trGo").onclick=async()=>{
 };
 $("trResult").addEventListener("input",()=>{ $("trResult").classList.toggle("empty",!$("trResult").value.trim()); });
 let translatorVoiceAudio=null;
-const syncTranslatorVoiceActions=()=>{ const henrik=$("trVoice")?.value==="henrik"; $("trSendVoice").hidden=false; $("trVideoVoice").hidden=!henrik; };
-$("trVoice").addEventListener("change",syncTranslatorVoiceActions);
-$("trTo").addEventListener("change",syncTranslatorVoiceActions);
-$("trSwap").addEventListener("click",syncTranslatorVoiceActions);
-syncTranslatorVoiceActions();
 $("trSendVoice").onclick=async()=>{
   const text=$("trResult").value.trim(), language=$("trTo").value, voice=$("trVoice")?.value||"standard";
   if(!text || $("trResult").classList.contains("empty")) return;
@@ -2015,10 +2023,10 @@ $("trSendVoice").onclick=async()=>{
   }catch(e){if(e?.name!=="AbortError")toast("Could not send voice.");}
 };
 $("trVideoVoice").onclick=async()=>{
-  if($("trVoice")?.value!=="henrik" || $("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
+  if($("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
   const btn=$("trVideoVoice"), original=btn.textContent; btn.disabled=true; btn.textContent="Creating…";
   try{
-    const res=await fetch("/api/voice-video",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value})});
+    const res=await fetch("/api/voice-video",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:$("trResult").value.trim(),language:$("trTo").value,voice:$("trVoice").value})});
     if(!res.ok){let msg="Could not create voice video.";try{const d=await res.json();if(d.message)msg=d.message}catch{}throw new Error(msg)}
     const blob=await res.blob(), file=new File([blob],"incoming-voice-message.mp4",{type:"video/mp4"}), url=URL.createObjectURL(blob);
     const preview=document.createElement("div"); preview.style.cssText="position:fixed;inset:0;z-index:9999;background:#030711;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px";
@@ -2089,7 +2097,6 @@ configureRoleLanguageSettings();
 $("profileBtn").onclick=()=>$("settingsBtn").click();
 
 if (CAN_TRANSLATE_TOOL) fillTranslateLanguages();
-syncTranslatorVoiceActions();
 applyRoleUi();
 applyProfileLanguagesV7();
 
