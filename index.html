@@ -341,7 +341,7 @@ body.composer-expanded-active #empty{display:none!important}
 .transresult{white-space:pre-wrap;overflow-wrap:anywhere}.transresult.empty{color:var(--mute)}
 .panefoot{position:absolute;left:12px;right:12px;bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;pointer-events:none}
 .panefoot .count{font-size:11px;color:var(--mute)}
-.splittranslate:has(#trResult.empty) #trUseResult{display:none}
+
 @media(max-width:380px){
   #translateView .transpane.result .paneactions{gap:4px}
   #translateView .transpane.result .paneactions button{padding-inline:5px}
@@ -1972,7 +1972,9 @@ function translateLanguageChanged(){
 $("trFrom").onchange=translateLanguageChanged; $("trTo").onchange=translateLanguageChanged;
 $("trSwap").onclick=()=>{ const a=$("trFrom").value; $("trFrom").value=$("trTo").value; $("trTo").value=a; updateTranslateLangUi(); const r=$("trResult"); if(!r.classList.contains("empty")){ $("trInput").value=r.value; $("trCount").textContent=$("trInput").value.length; r.value=""; r.classList.add("empty"); } };
 $("trUseResult").onclick=()=>{
-  if($("trGo").disabled || $("trResult").classList.contains("empty") || !$("trResult").value.trim()) return;
+  if($("trGo").disabled) return;
+  if(!$("trResult").value.trim()) return toast("Translate a text first, then use the result.");
+  $("trResult").classList.remove("empty");
   $("trSwap").click();
   $("trInput").scrollTop=0;
   $("trTo").focus();
