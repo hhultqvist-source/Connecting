@@ -2528,7 +2528,8 @@ rtcInit();
 .archive-entry{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:16px;overflow:hidden}
 .archive-entry summary{cursor:pointer;list-style:none;padding:16px}
 .archive-entry summary::-webkit-details-marker{display:none}
-.archive-meta{display:flex;justify-content:space-between;gap:12px;color:var(--mute);font-size:11px;flex-wrap:wrap}
+.archive-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--mute);font-size:11px;flex-wrap:wrap}
+.archive-copy{border:1px solid var(--line);border-radius:10px;color:var(--fjord);background:rgba(127,214,194,.08);font-size:12px;padding:8px 12px;min-height:36px;flex-shrink:0}
 .archive-preview{margin-top:9px;font-size:14px;line-height:1.5;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .archive-content{padding:0 16px 16px}
 .archive-content h3{font-size:12px;color:var(--fjord);margin:16px 0 7px}
@@ -2593,15 +2594,21 @@ rtcInit();
     summary.append(meta,el("div","archive-preview",row.translated_text));
     const content=el("div","archive-content");
     content.append(el("h3",null,"Original · "+row.source_language),el("p",null,row.source_text),el("h3",null,"Translation · "+row.target_language),el("p",null,row.translated_text));
-    const actions=el("div","archive-actions"),copy=el("button",null,"Copy translation"),download=el("button",null,"Download text");
-    copy.onclick=async()=>{try{await navigator.clipboard.writeText(row.translated_text);toast("Translation copied");}catch{toast("Select the text to copy it.");}};
+    const actions=el("div","archive-actions"),copy=el("button","archive-copy","Copy"),download=el("button",null,"Download text");
+    copy.type="button";copy.setAttribute("aria-label","Copy saved translation");
+    copy.onclick=async(event)=>{
+      event.preventDefault();event.stopPropagation();
+      try{await navigator.clipboard.writeText(row.translated_text);toast("Translation copied");}
+      catch{toast("Open the saved text and select it to copy.");}
+    };
+    meta.append(copy);
     download.onclick=()=>{
      const blob=new Blob([row.source_language+" → "+row.target_language+"\n"+new Date(row.created_at).toLocaleString()+"\n\nOriginal\n"+row.source_text+"\n\nTranslation\n"+row.translated_text],{type:"text/plain;charset=utf-8"});
      const url=URL.createObjectURL(blob),anchor=document.createElement("a");
      anchor.href=url;anchor.download="translation-"+row.created_at.slice(0,10)+"-"+row.id.slice(0,8)+".txt";
      document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
     };
-    actions.append(copy,download);content.append(actions);details.append(summary,content);list.append(details);
+    actions.append(download);content.append(actions);details.append(summary,content);list.append(details);
    }
   }catch(error){status.textContent="Could not open saved translations on this device.";list.replaceChildren(el("p","archive-empty","Please try opening My translations again."));console.warn("[Connecting] archive storage",error);}
  }
