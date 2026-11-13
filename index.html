@@ -519,7 +519,7 @@ body.chat-only .chat{padding-bottom:8px}
     <div class="transmid" aria-hidden="true"></div>
     <div class="transpane result">
       <textarea class="transresult empty" id="trResult" maxlength="12000" rows="1" placeholder="Your translation will appear here." autocorrect="on" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
-      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option></select><button id="trListen">Listen</button><button id="trSendVoice">Send</button><button id="trVideoVoice">Video</button><button id="trCopy">Copy</button></div></div>
+      <div class="panefoot"><span class="count" id="trResultLang">🇷🇺</span><div class="paneactions"><select id="trVoice" aria-label="Voice"><option value="standard">Voice</option><option value="henrik">Henrik</option><option value="custom">Valfri</option></select><button id="trListen">Listen</button><button id="trSendVoice">Send</button><button id="trVideoVoice">Video</button><button id="trCopy">Copy</button></div></div>
     </div>
   </div>
 </section>
@@ -2014,7 +2014,7 @@ $("trSendVoice").onclick=async()=>{
   const text=$("trResult").value.trim(), language=$("trTo").value, voice=$("trVoice")?.value||"standard";
   if(!text || $("trResult").classList.contains("empty")) return;
   if(!translatorVoiceAudio?.blob || translatorVoiceAudio.text!==text || translatorVoiceAudio.language!==language || translatorVoiceAudio.voice!==voice) return toast("Listen first to prepare this audio file.");
-  const file=new File([translatorVoiceAudio.blob],voice==="henrik"?"Henrik-"+language+"-voice.mp3":language+"-translation.mp3",{type:translatorVoiceAudio.blob.type||"audio/mpeg"});
+  const file=new File([translatorVoiceAudio.blob],voice==="henrik"?"Henrik-"+language+"-voice.mp3":voice==="custom"?"Valfri-"+language+"-voice.mp3":language+"-translation.mp3",{type:translatorVoiceAudio.blob.type||"audio/mpeg"});
   try{
     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))) await navigator.share({files:[file]});
     else{
