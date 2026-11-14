@@ -108,6 +108,17 @@ async function handleTTS(req,res){
   }catch(err){ res.writeHead(502,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice service could not be reached."})); }
 }
 
+function voiceVideoFilter(videoDuration){
+  return [
+    "[0:v]delogo=x=38:y=496:w=180:h=172,delogo=x=502:y=496:w=180:h=172,fps=30,format=yuv420p[background]",
+    `[1:a]apad=whole_dur=${videoDuration},asplit=2[audio][visual]`,
+    "[visual]aformat=channel_layouts=mono,volume=2,showwaves=s=168x144:r=30:mode=cline:colors=0x3F86FF:scale=sqrt:draw=full,format=rgba,colorkey=black:0.01:0,split=2[left][rightSource]",
+    "[rightSource]hflip[right]",
+    "[background][left]overlay=x=48:y=510:eof_action=pass:shortest=0[leftOverlaid]",
+    "[leftOverlaid][right]overlay=x=504:y=510:eof_action=pass:shortest=0,format=yuv420p[video]"
+  ].join(";");
+}
+
 async function handleVoiceVideo(req,res){
   const key=process.env.ELEVENLABS_API_KEY;
   if(!key){ res.writeHead(503,{"Content-Type":"application/json"}); return res.end(JSON.stringify({message:"Voice service is not configured."})); }
@@ -133,9 +144,9 @@ async function handleVoiceVideo(req,res){
     }));
     // Keep the image track at least as long as the complete audio, including encoder padding.
     const videoDuration=String(Math.ceil(Number(duration)+0.05));
-    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-hide_banner","-loglevel","error","-nostats","-y","-threads","1","-loop","1","-framerate","1","-i",artwork,"-i",mp3,"-filter_threads","1","-r","30","-c:v","libx264","-threads","2","-preset","veryfast","-tune","stillimage","-profile:v","baseline","-level:v","3.1","-bf","0","-g","60","-pix_fmt","yuv420p","-af","apad","-c:a","aac","-b:a","128k","-t",videoDuration,"-video_track_timescale","90000","-movflags","+faststart",mp4],{timeout:120000,maxBuffer:1024*1024},(e,stdout,stderr)=>{if(e){console.error("voice-video ffmpeg:",stderr||e.message);reject(e)}else resolve()}));
+    await new Promise((resolve,reject)=>execFile(ffmpegPath,["-hide_banner","-loglevel","error","-nostats","-y","-threads","1","-loop","1","-framerate","1","-i",artwork,"-i",mp3,"-filter_threads","1","-filter_complex_threads","1","-filter_complex",voiceVideoFilter(videoDuration),"-map","[video]","-map","[audio]","-r","30","-c:v","libx264","-threads","2","-preset","veryfast","-tune","stillimage","-profile:v","baseline","-level:v","3.1","-bf","0","-g","60","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",videoDuration,"-video_track_timescale","90000","-movflags","+faststart",mp4],{timeout:120000,maxBuffer:1024*1024},(e,stdout,stderr)=>{if(e){console.error("voice-video ffmpeg:",stderr||e.message);reject(e)}else resolve()}));
     const video=fs.readFileSync(mp4);
-    console.info("voice-video generated",JSON.stringify({audioSeconds:Number(duration),videoSeconds:Number(videoDuration),fps:30,bytes:video.length}));
+    console.info("voice-video generated",JSON.stringify({audioSeconds:Number(duration),videoSeconds:Number(videoDuration),fps:30,animated:true,bytes:video.length}));
     res.writeHead(200,{"Content-Type":"video/mp4","Content-Length":video.length,"Content-Disposition":"attachment; filename=\"incoming-voice-message.mp4\"","Cache-Control":"no-store"});
     res.end(video);
   }catch(e){console.error("voice-video error:",JSON.stringify({message:e?.message,code:e?.code,signal:e?.signal,killed:e?.killed}));res.writeHead(502,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify({message:"Could not create voice video."}));}
