@@ -653,7 +653,8 @@ const LANGS = [
   ["Russian","Ryska","ru-RU","ryska"],["Ukrainian","Ukrainska","uk-UA","ukrainska"],
   ["Polish","Polska","pl-PL","polska"],["Estonian","Estniska","et-EE","estniska"],
   ["Latvian","Lettiska","lv-LV","lettiska"],["Lithuanian","Litauiska","lt-LT","litauiska"],
-  ["Georgian","Georgiska","ka-GE","georgiska"],["Armenian","Armeniska","hy-AM","armeniska"]
+  ["Georgian","Georgiska","ka-GE","georgiska"],["Armenian","Armeniska","hy-AM","armeniska"],
+  ["Thai","Thailändska","th-TH","thailändska"]
 ];
 const L = Object.fromEntries(LANGS.map(([v,n,c,sv]) => [v,{name:v,code:c,sv:v.toLowerCase()}]));
 
@@ -1998,7 +1999,7 @@ function applyProfileLanguagesV7(){
 }
 
 /* ---------- Connecting v4 navigation + pure translation ---------- */
-const FLAG = {Swedish:"🇸🇪",English:"🇬🇧",Norwegian:"🇳🇴",Danish:"🇩🇰",Finnish:"🇫🇮",German:"🇩🇪",French:"🇫🇷",Spanish:"🇪🇸",Icelandic:"🇮🇸",Portuguese:"🇵🇹",Italian:"🇮🇹",Russian:"🇷🇺",Ukrainian:"🇺🇦",Polish:"🇵🇱",Estonian:"🇪🇪",Latvian:"🇱🇻",Lithuanian:"🇱🇹",Georgian:"🇬🇪",Armenian:"🇦🇲"};
+const FLAG = {Swedish:"🇸🇪",English:"🇬🇧",Norwegian:"🇳🇴",Danish:"🇩🇰",Finnish:"🇫🇮",German:"🇩🇪",French:"🇫🇷",Spanish:"🇪🇸",Icelandic:"🇮🇸",Portuguese:"🇵🇹",Italian:"🇮🇹",Russian:"🇷🇺",Ukrainian:"🇺🇦",Polish:"🇵🇱",Estonian:"🇪🇪",Latvian:"🇱🇻",Lithuanian:"🇱🇹",Georgian:"🇬🇪",Armenian:"🇦🇲",Thai:"🇹🇭"};
 
 document.querySelectorAll(".navbtn").forEach(btn => btn.addEventListener("click", () => {
   document.querySelectorAll(".navbtn").forEach(b => b.classList.toggle("active", b === btn));

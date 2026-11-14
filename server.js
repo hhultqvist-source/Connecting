@@ -82,7 +82,14 @@ function elevenVoiceId(language,voice){
   if(voice==="custom") return "qRRCpZ9846Z3NiCRzdQ5";
   if(language==="Norwegian") return "i4PEHCSo27zMoz3IwmXu";
   if(language==="English") return "IjcOp0ob3Kk57Dl2uzA0";
+  if(language==="Thai") return "3SQTl9c6zS9vh1r8maCI";
   return process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
+}
+
+function elevenSpeechRequest(text,language){
+  if(language==="Thai") return {text,model_id:"eleven_v3",language_code:"th"};
+  if(language==="Norwegian") return {text,model_id:"eleven_flash_v2_5",language_code:"no"};
+  return {text,model_id:"eleven_multilingual_v2"};
 }
 
 async function handleTTS(req,res){
@@ -100,7 +107,7 @@ async function handleTTS(req,res){
   try{
     const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
-      body:JSON.stringify(language==="Norwegian" ? {text,model_id:"eleven_flash_v2_5",language_code:"no"} : {text,model_id:"eleven_multilingual_v2"})
+      body:JSON.stringify(elevenSpeechRequest(text,language))
     });
     if(!upstream.ok){ const err=await upstream.text().catch(()=>""); res.writeHead(upstream.status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}); return res.end(JSON.stringify({message:"Voice generation failed.",detail:err.slice(0,300)})); }
     const audio=Buffer.from(await upstream.arrayBuffer());
@@ -131,7 +138,7 @@ async function handleVoiceVideo(req,res){
     const voiceId=elevenVoiceId(language,String(body.voice||"henrik"));
     const upstream=await fetch("https://api.elevenlabs.io/v1/text-to-speech/"+encodeURIComponent(voiceId)+"?output_format=mp3_44100_128",{
       method:"POST",headers:{"xi-api-key":key,"content-type":"application/json","accept":"audio/mpeg"},
-      body:JSON.stringify(language==="Norwegian"?{text,model_id:"eleven_flash_v2_5",language_code:"no"}:{text,model_id:"eleven_multilingual_v2"})
+      body:JSON.stringify(elevenSpeechRequest(text,language))
     });
     if(!upstream.ok) throw new Error("Voice generation failed.");
     fs.writeFileSync(mp3,Buffer.from(await upstream.arrayBuffer()));
