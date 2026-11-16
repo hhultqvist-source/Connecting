@@ -549,6 +549,7 @@ body.chat-only .chat{padding-bottom:8px}
       <option value="warm">Warm / personal</option>
       <option value="seducing">Seducing</option>
       <option value="shakespeare">Shakespeare</option>
+      <option value="urban">Urban</option>
     </select>
     <p id="trToneHint"></p>
     <p style="font-size:12px;margin:8px 0 0">Applies to Translate only. Meaning, facts and emotional intensity are preserved.</p>
@@ -972,6 +973,7 @@ function toast(msg){
 
 /* ---------- Settings ---------- */
 const TRANSLATION_TONES = {
+  urban:{"hint":"Relaxed, contemporary slang and idioms that fit your message.","instruction":"Translate in a relaxed, contemporary urban conversational register, using natural slang and idioms appropriate to the target language and context. Vocabulary bank (words and expressions only): crush, beige flag, ghosting, situationship, benching, cuffing season, love bombing, breadcrumbing, soft launch, catfishing, hard launch, simp, red flag, rizz, bad apple, big cheese, bookworm, cold fish, couch potato, dark horse, eager beaver, early bird, good egg, happy camper, jack of all trades, lone wolf, loose cannon, night owl, pain in the neck, party animal, rolling stone, social butterfly, tough cookie, wet blanket. Use these only when their actual meaning matches the source; never insert unrelated vocabulary or force slang. For non-English targets use natural local equivalents rather than automatically retaining English slang. Preserve facts, intention, emotional intensity and politeness; do not add insults, stereotypes, romance or sexual meaning. Do not turn harassment into admiration. Output only the translation, with no glossary, definitions, Swedish explanations or commentary."},
   shakespeare:{
     hint:"Poetic, Shakespeare-inspired English. Other target languages use Natural.",
     instruction:"Translate into readable Shakespeare-inspired Early Modern English, not Middle English. Use elegant period-style phrasing and thou/thee/thy/thine or older verb forms only where grammatically appropriate. Distinguish singular thou from plural you. Preserve meaning, facts, emotional intensity and the original speaker's intention. Do not invent metaphors, imagery, declarations of love, extra lines, rhyme or plot. Keep modern names, numbers, dates and practical details intact. Do not force verse or imitate quotations from plays."
