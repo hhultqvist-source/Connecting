@@ -550,6 +550,7 @@ body.chat-only .chat{padding-bottom:8px}
       <option value="seducing">Seducing</option>
       <option value="shakespeare">Shakespeare</option>
       <option value="urban">Urban</option>
+      <option value="oxford">Oxford</option>
     </select>
     <p id="trToneHint"></p>
     <p style="font-size:12px;margin:8px 0 0">Applies to Translate only. Meaning, facts and emotional intensity are preserved.</p>
@@ -972,7 +973,95 @@ function toast(msg){
 }
 
 /* ---------- Settings ---------- */
+const TRANSLATION_VOCABULARY = {
+  "a1": [
+    "I'm happy.",
+    "I'm sad.",
+    "I'm tired.",
+    "I'm angry.",
+    "I'm scared.",
+    "I'm sick.",
+    "It's expensive.",
+    "It's hard.",
+    "It's easy.",
+    "It's cold.",
+    "It's hot.",
+    "I'm late.",
+    "I don't know.",
+    "I understand.",
+    "I like it.",
+    "I don't like it.",
+    "I agree.",
+    "I disagree.",
+    "I can help.",
+    "Call me.",
+    "I'm leaving.",
+    "I want it.",
+    "I'll try.",
+    "Be careful.",
+    "Good job!"
+  ],
+  "b1": [
+    "I'm really pleased.",
+    "I'm feeling down.",
+    "I'm exhausted.",
+    "I'm upset.",
+    "I'm frightened.",
+    "I'm feeling unwell.",
+    "It costs a fortune.",
+    "It's challenging.",
+    "It's straightforward.",
+    "It's freezing.",
+    "It's boiling.",
+    "I'm running late.",
+    "I'm not sure.",
+    "I get the point.",
+    "I'm fond of it.",
+    "I'm not into it.",
+    "I'm with you on that.",
+    "I don't see it that way.",
+    "I can give you a hand.",
+    "Give me a call.",
+    "I'm heading out.",
+    "I'd love to have it.",
+    "I'll give it a shot.",
+    "Watch out.",
+    "Well done!"
+  ],
+  "c1": [
+    "I'm absolutely delighted.",
+    "I'm feeling disheartened.",
+    "I'm completely drained.",
+    "I'm absolutely furious.",
+    "I'm terrified.",
+    "I'm unwell.",
+    "It's exorbitant.",
+    "It's quite demanding.",
+    "It's remarkably effortless.",
+    "It's bitterly cold.",
+    "It's sweltering.",
+    "I'm behind schedule.",
+    "I haven't the faintest idea.",
+    "I fully grasp the concept.",
+    "I have a soft spot for it.",
+    "It doesn't appeal to me.",
+    "I couldn't agree more.",
+    "I beg to differ.",
+    "Happy to assist!",
+    "Feel free to get in touch.",
+    "I'd better make a move.",
+    "I've got my heart set on it.",
+    "I'll give it my best shot.",
+    "Exercise caution.",
+    "Outstanding work!"
+  ]
+};
 const TRANSLATION_TONES = {
+  oxford:{
+    hint:"Polished, articulate British English, inspired by the advanced vocabulary bank.",
+    instruction:"Use polished, articulate, idiomatic British English with varied vocabulary and elegant but readable phrasing. This is a user-named style, not an official Oxford or CEFR certification. Vocabulary bank: "+TRANSLATION_VOCABULARY.c1.join(" | ")+". These are optional examples, not automatic substitutions or equivalent translations of the A1/B1 rows. Use an expression only when its actual meaning, intensity, context and speech act match the source. Never turn happy into absolutely delighted, anger into fury, agreement into complete agreement, or a phone-call request into a general invitation to make contact unless the original supports that meaning. Preserve qualifications, emotional strength, requests and practical details. Do not force ornate wording or add promises. For other target languages use an equally polished natural register in that language, without inserting English phrases. Output only the translation, with no glossary or explanations."
+  },
+
   urban:{"hint":"Relaxed, contemporary slang and idioms that fit your message.","instruction":"Translate in a relaxed, contemporary urban conversational register, using natural slang and idioms appropriate to the target language and context. Vocabulary bank (words and expressions only): crush, beige flag, ghosting, situationship, benching, cuffing season, love bombing, breadcrumbing, soft launch, catfishing, hard launch, simp, red flag, rizz, bad apple, big cheese, bookworm, cold fish, couch potato, dark horse, eager beaver, early bird, good egg, happy camper, jack of all trades, lone wolf, loose cannon, night owl, pain in the neck, party animal, rolling stone, social butterfly, tough cookie, wet blanket. Use these only when their actual meaning matches the source; never insert unrelated vocabulary or force slang. For non-English targets use natural local equivalents rather than automatically retaining English slang. Preserve facts, intention, emotional intensity and politeness; do not add insults, stereotypes, romance or sexual meaning. Do not turn harassment into admiration. Output only the translation, with no glossary, definitions, Swedish explanations or commentary."},
   shakespeare:{
     hint:"Poetic, Shakespeare-inspired English. Other target languages use Natural.",
