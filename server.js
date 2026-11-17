@@ -78,7 +78,7 @@ async function handleClaude(req,res){
 
 
 function elevenVoiceId(language,voice){
-  if(voice==="goliath") return "tJhWDBTSAveEOucKUtO0";
+  if(voice==="goliath") return "K4hJT711dlhBNLYz7I6D";
   if(voice==="character") return "ZaovTqhD16YvmEG2nDUD";
   if(voice==="henrik") return "zU68sM74Du1jMAfSIcft";
   if(voice==="custom") return "qRRCpZ9846Z3NiCRzdQ5";
